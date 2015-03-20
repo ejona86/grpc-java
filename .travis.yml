@@ -28,4 +28,10 @@ notifications:
 cache:
   directories:
     - /tmp/proto3-a2
-    - $HOME/.m2
+    - $HOME/.m2/repository/io/netty
+    - $HOME/.gradle/caches/modules-2
+    - $HOME/.gradle/wrapper
+
+before_cache:
+  - find $HOME/.gradle/ -name "*.lock" -delete
+  - find $HOME/.gradle/wrapper -not -name "*-all.zip" -delete
