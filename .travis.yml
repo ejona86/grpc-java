@@ -1,0 +1,31 @@
+sudo: false
+
+language: java
+
+env:
+  global:
+    - LDFLAGS=-L/tmp/proto3-a2/lib
+    - CXXFLAGS=-I/tmp/proto3-a2/include
+    - LD_LIBRARY_PATH=/tmp/proto3-a2/lib
+    - PATH=/tmp/proto3-a2/bin:$PATH
+
+before_install:
+  - buildscripts/make_dependencies.sh # build protoc into /tmp/proto3-a2
+
+jdk:
+  - oraclejdk8
+
+os:
+  - linux
+
+branches:
+  only:
+    - master
+
+notifications:
+  email: false
+
+cache:
+  directories:
+    - /tmp/proto3-a2
+    - $HOME/.m2
