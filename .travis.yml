@@ -17,6 +17,7 @@ jdk:
 
 os:
   - linux
+  - osx
 
 branches:
   only:
