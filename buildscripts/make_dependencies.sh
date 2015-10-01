@@ -17,7 +17,25 @@ else
   ./autogen.sh
   # install here so we don't need sudo
   ./configure --prefix=${INSTALL_DIR}
-  make -j2
+  make -j$(nproc)
+  make install
+  popd
+fi
+
+INSTALL_DIR=/tmp/openssl-${OPENSSL_VERSION}
+
+if [ -f ${INSTALL_DIR}/lib/libssl.so ]; then
+  echo "Not building openssl Already built"
+else
+  wget -O - https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz | tar xz -C $DOWNLOAD_DIR
+  pushd $DOWNLOAD_DIR/openssl-${OPENSSL_VERSION}
+  # install here so we don't need sudo
+  if [ "$(uname)" = Linux ]; then
+    ./Configure linux-x86_64 shared no-ssl2 no-ssl3 no-comp --prefix=${INSTALL_DIR}
+  else
+    ./Configure darwin64-x86_64-cc shared no-ssl2 no-ssl3 no-comp --prefix=${INSTALL_DIR}
+  fi
+  make -j$(nproc)
   make install
   popd
 fi

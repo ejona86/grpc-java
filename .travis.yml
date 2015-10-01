@@ -5,9 +5,10 @@ language: java
 env:
   global:
     - PROTOBUF_VERSION=3.0.0-beta-1
+    - OPENSSL_VERSION=1.0.2d
     - LDFLAGS=-L/tmp/protobuf-${PROTOBUF_VERSION}/lib
     - CXXFLAGS=-I/tmp/protobuf-${PROTOBUF_VERSION}/include
-    - LD_LIBRARY_PATH=/tmp/protobuf-${PROTOBUF_VERSION}/lib
+    - LD_LIBRARY_PATH=/tmp/protobuf-${PROTOBUF_VERSION}/lib:/tmp/openssl-${OPENSSL_VERSION}/lib
 
 before_install:
   - buildscripts/make_dependencies.sh # build protoc into /tmp/protobuf-${PROTOBUF_VERSION}
@@ -20,11 +21,12 @@ before_script:
 after_success:
   - ./gradlew :grpc-all:coveralls
 
-jdk:
-  - oraclejdk8
+#jdk:
+#  - oraclejdk8
 
 os:
-  - linux
+  #- linux
+  - osx
 
 notifications:
   email: false
