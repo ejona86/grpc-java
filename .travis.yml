@@ -11,9 +11,11 @@ env:
     - LD_LIBRARY_PATH=/tmp/protobuf-${PROTOBUF_VERSION}/lib:/tmp/openssl-${OPENSSL_VERSION}/lib
 
 before_install:
-  # Work around https://github.com/travis-ci/travis-ci/issues/2317
+    # Work around https://github.com/travis-ci/travis-ci/issues/2317
   - if \[ "$TRAVIS_OS_NAME" = linux \]; then jdk_switcher use oraclejdk8; fi
-  - buildscripts/make_dependencies.sh # build protoc into /tmp/protobuf-${PROTOBUF_VERSION}
+  - if \[ "$TRAVIS_OS_NAME" = osx \]; then brew update; fi
+    # build protoc into /tmp/protobuf-${PROTOBUF_VERSION}
+  - buildscripts/make_dependencies.sh
   - mkdir -p $HOME/.gradle
   - echo "checkstyle.ignoreFailures=false" >> $HOME/.gradle/gradle.properties
 
