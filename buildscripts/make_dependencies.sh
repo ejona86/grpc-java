@@ -29,7 +29,11 @@ if [ -f ${INSTALL_DIR}/lib/libssl.so ]; then
 else
   wget -O - https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz | tar xz -C $DOWNLOAD_DIR
   pushd $DOWNLOAD_DIR/openssl-${OPENSSL_VERSION}
-  ./Configure linux-x86_64 shared no-ssl2 no-comp --prefix=${INSTALL_DIR}
+  if [ "$(uname)" = Linux ]; then
+    ./Configure linux-x86_64 shared no-ssl2 no-comp --prefix=${INSTALL_DIR}
+  else
+    ./Configure darwin64-x86_64-cc shared no-ssl2 no-comp --prefix=${INSTALL_DIR}
+  fi
   make -j$(nproc)
   make install
   popd
