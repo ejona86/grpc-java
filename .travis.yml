@@ -11,6 +11,8 @@ env:
     - LD_LIBRARY_PATH=/tmp/protobuf-${PROTOBUF_VERSION}/lib:/tmp/openssl-${OPENSSL_VERSION}/lib
 
 before_install:
+  # Work around https://github.com/travis-ci/travis-ci/issues/2317
+  - if \[ "$TRAVIS_OS_NAME" = linux \]; then jdk_switcher use oraclejdk8; fi
   - buildscripts/make_dependencies.sh # build protoc into /tmp/protobuf-${PROTOBUF_VERSION}
   - mkdir -p $HOME/.gradle
   - echo "checkstyle.ignoreFailures=false" >> $HOME/.gradle/gradle.properties
@@ -21,16 +23,12 @@ before_script:
 after_success:
   - ./gradlew :grpc-all:coveralls
 
-# Use matrix to work around https://github.com/travis-ci/travis-ci/issues/3975
-# This also works around https://github.com/travis-ci/travis-ci/issues/2317 ,
-# but that is easy to work around by manually calling jdk_switcher if on linux
-matrix:
-  include:
-    - os: linux
-      jdk: oraclejdk8
-    - os: osx
-      # This image comes with jdk8
-      osx_image: xcode7
+os:
+  - linux
+  - osx
+
+# This image comes with jdk8
+osx_image: xcode7
 
 notifications:
   email: false
