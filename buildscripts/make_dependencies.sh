@@ -26,6 +26,8 @@ INSTALL_DIR=/tmp/openssl-${OPENSSL_VERSION}
 
 if [ -f ${INSTALL_DIR}/lib/libssl.so ]; then
   echo "Not building openssl. Already built"
+elif [ "$(uname)" = Darwin ]; then
+  brew install openssl
 else
   wget -O - https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz | tar xz -C $DOWNLOAD_DIR
   pushd $DOWNLOAD_DIR/openssl-${OPENSSL_VERSION}
