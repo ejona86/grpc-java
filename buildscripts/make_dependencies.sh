@@ -28,7 +28,8 @@ INSTALL_DIR=/tmp/openssl-${OPENSSL_VERSION}
 if [ -f ${INSTALL_DIR}/lib/libssl.so ]; then
   echo "Not building openssl. Already built"
 elif [ "$(uname)" = Darwin ]; then
-  brew install openssl
+  #brew install openssl
+  echo not doing it
 else
   # The version without the patch letter (e.g., 1.0.2 provided 1.0.2d)
   VERSION_BASE=${OPENSSL_VERSION%%[a-z]*}
