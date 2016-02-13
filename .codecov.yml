@@ -1,0 +1,12 @@
+coverage:
+  status:
+    project:
+      enabled: true
+      threshold: "1%"
+    patch:
+      enabled: true
+      target: "90%"
+    changes:
+      enabled: true
+  ignore:
+    - "all/*"
