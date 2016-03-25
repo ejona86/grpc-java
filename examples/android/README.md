@@ -26,5 +26,5 @@ $ # follow the instructions in 'How to Build'
 **3 Install the app**
 ```sh
 $ cd examples/android
-$ ./gradlew installDebug
+$ ../../gradlew installDebug
 ```
