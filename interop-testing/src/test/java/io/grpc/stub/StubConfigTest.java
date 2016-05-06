@@ -113,7 +113,7 @@ public class StubConfigTest {
     TestServiceGrpc.TestServiceBlockingStub reconfiguredStub = stub.withDeadlineNanoTime(deadline);
     // New altered config
     assertNotNull(reconfiguredStub.getCallOptions().getDeadlineNanoTime());
-    long maxDelta = MILLISECONDS.toNanos(10);
+    long maxDelta = MILLISECONDS.toNanos(0);
     long actualDelta = Math.abs(reconfiguredStub.getCallOptions().getDeadlineNanoTime() - deadline);
     assertTrue(maxDelta + " < " + actualDelta, maxDelta >= actualDelta);
     // Default config unchanged
