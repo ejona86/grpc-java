@@ -43,17 +43,19 @@ import com.google.common.util.concurrent.ListenableFuture;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
+import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
+import io.grpc.Server;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.ServiceDescriptor;
 import io.grpc.Status;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
-import io.grpc.internal.ManagedChannelImpl;
 import io.grpc.stub.ServerCalls.NoopStreamObserver;
 import io.grpc.stub.ServerCallsTest.IntegerMarshaller;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -83,12 +85,25 @@ public class ClientCallsTest {
       "some/method",
       new IntegerMarshaller(), new IntegerMarshaller());
 
+  private Server server;
+  private ManagedChannel channel;
+
   @Mock
   private ClientCall<Integer, String> call;
 
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
+  }
+
+  @After
+  public void tearDown() {
+    if (server != null) {
+      server.shutdownNow();
+    }
+    if (channel != null) {
+      channel.shutdownNow();
+    }
   }
 
   @Test
@@ -257,7 +272,7 @@ public class ClientCallsTest {
 
   @Test
   public void inprocessTransportInboundFlowControl() throws Exception {
-    final Semaphore semaphore = new Semaphore(1);
+    final Semaphore semaphore = new Semaphore(0);
     ServerServiceDefinition service = ServerServiceDefinition.builder(
         new ServiceDescriptor("some", STREAMING_METHOD))
         .addMethod(STREAMING_METHOD, ServerCalls.asyncBidiStreamingCall(
@@ -288,13 +303,13 @@ public class ClientCallsTest {
             }))
         .build();
     long tag = System.nanoTime();
-    InProcessServerBuilder.forName("go-with-the-flow" + tag).addService(service).build().start();
-    ManagedChannelImpl channel = InProcessChannelBuilder.forName("go-with-the-flow" + tag).build();
+    server = InProcessServerBuilder.forName("go-with-the-flow" + tag).directExecutor()
+        .addService(service).build().start();
+    channel = InProcessChannelBuilder.forName("go-with-the-flow" + tag).directExecutor().build();
     final ClientCall<Integer, Integer> clientCall = channel.newCall(STREAMING_METHOD,
         CallOptions.DEFAULT);
     final CountDownLatch latch = new CountDownLatch(1);
-    final List<Integer> receivedMessages = new ArrayList<Integer>(6);
-    semaphore.acquire();
+    final List<Object> receivedMessages = new ArrayList<Object>(6);
 
     ClientResponseObserver<Integer, Integer> responseObserver =
         new ClientResponseObserver<Integer, Integer>() {
@@ -310,6 +325,7 @@ public class ClientCallsTest {
 
           @Override
           public void onError(Throwable t) {
+            receivedMessages.add(t);
             latch.countDown();
           }
 
@@ -327,17 +343,16 @@ public class ClientCallsTest {
     integerStreamObserver.request(3);
     integerStreamObserver.onCompleted();
     assertTrue(latch.await(5, TimeUnit.SECONDS));
-    // Very that number of messages produced in each onReady handler call matches the number
+    // Verify that number of messages produced in each onReady handler call matches the number
     // requested by the client. Note that ClientCalls.asyncBidiStreamingCall will request(1)
     assertEquals(Arrays.asList(0, 1, 1, 2, 2, 2), receivedMessages);
   }
 
-  @org.junit.Ignore
   @Test
   public void inprocessTransportOutboundFlowControl() throws Exception {
     final CountDownLatch latch = new CountDownLatch(1);
-    final Semaphore semaphore = new Semaphore(1);
-    final List<Integer> receivedMessages = new ArrayList<Integer>(6);
+    final Semaphore semaphore = new Semaphore(0);
+    final List<Object> receivedMessages = new ArrayList<Object>(6);
     ServerServiceDefinition service = ServerServiceDefinition.builder(
         new ServiceDescriptor("some", STREAMING_METHOD))
         .addMethod(STREAMING_METHOD, ServerCalls.asyncBidiStreamingCall(
@@ -361,15 +376,20 @@ public class ClientCallsTest {
                     }
                   }
                 }).start();
-                return new ServerCalls.NoopStreamObserver<Integer>() {
+                return new StreamObserver<Integer>() {
                   @Override
                   public void onNext(Integer value) {
                     receivedMessages.add(value);
                   }
 
                   @Override
+                  public void onError(Throwable t) {
+                    receivedMessages.add(t);
+                    latch.countDown();
+                  }
+
+                  @Override
                   public void onCompleted() {
-                    serverCallObserver.onCompleted();
                     latch.countDown();
                   }
                 };
@@ -377,11 +397,11 @@ public class ClientCallsTest {
             }))
         .build();
     long tag = System.nanoTime();
-    InProcessServerBuilder.forName("go-with-the-flow" + tag).addService(service).build().start();
-    ManagedChannelImpl channel = InProcessChannelBuilder.forName("go-with-the-flow" + tag).build();
+    server = InProcessServerBuilder.forName("go-with-the-flow" + tag).directExecutor()
+        .addService(service).build().start();
+    channel = InProcessChannelBuilder.forName("go-with-the-flow" + tag).directExecutor().build();
     final ClientCall<Integer, Integer> clientCall = channel.newCall(STREAMING_METHOD,
         CallOptions.DEFAULT);
-    semaphore.acquire();
 
     ClientResponseObserver<Integer, Integer> responseObserver =
         new ClientResponseObserver<Integer, Integer>() {
@@ -418,7 +438,7 @@ public class ClientCallsTest {
 
     ClientCalls.asyncBidiStreamingCall(clientCall, responseObserver);
     assertTrue(latch.await(5, TimeUnit.SECONDS));
-    // Very that number of messages produced in each onReady handler call matches the number
+    // Verify that number of messages produced in each onReady handler call matches the number
     // requested by the client.
     assertEquals(Arrays.asList(0, 1, 1, 2, 2, 2), receivedMessages);
   }
