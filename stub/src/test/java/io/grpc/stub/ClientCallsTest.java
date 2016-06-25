@@ -40,6 +40,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 
 import io.grpc.CallOptions;
 import io.grpc.ClientCall;
@@ -350,9 +351,10 @@ public class ClientCallsTest {
 
   @Test
   public void inprocessTransportOutboundFlowControl() throws Exception {
-    final CountDownLatch latch = new CountDownLatch(1);
     final Semaphore semaphore = new Semaphore(0);
     final List<Object> receivedMessages = new ArrayList<Object>(6);
+    final SettableFuture<ServerCallStreamObserver<Integer>> observerFuture
+        = SettableFuture.create();
     ServerServiceDefinition service = ServerServiceDefinition.builder(
         new ServiceDescriptor("some", STREAMING_METHOD))
         .addMethod(STREAMING_METHOD, ServerCalls.asyncBidiStreamingCall(
@@ -362,20 +364,7 @@ public class ClientCallsTest {
                 final ServerCallStreamObserver<Integer> serverCallObserver =
                     (ServerCallStreamObserver<Integer>) responseObserver;
                 serverCallObserver.disableAutoInboundFlowControl();
-                new Thread(new Runnable() {
-                  @Override
-                  public void run() {
-                    try {
-                      serverCallObserver.request(1);
-                      semaphore.acquire();
-                      serverCallObserver.request(2);
-                      semaphore.acquire();
-                      serverCallObserver.request(3);
-                    } catch (Throwable t) {
-                      throw new RuntimeException(t);
-                    }
-                  }
-                }).start();
+                observerFuture.set(serverCallObserver);
                 return new StreamObserver<Integer>() {
                   @Override
                   public void onNext(Integer value) {
@@ -385,12 +374,11 @@ public class ClientCallsTest {
                   @Override
                   public void onError(Throwable t) {
                     receivedMessages.add(t);
-                    latch.countDown();
                   }
 
                   @Override
                   public void onCompleted() {
-                    latch.countDown();
+                    serverCallObserver.onCompleted();
                   }
                 };
               }
@@ -403,8 +391,9 @@ public class ClientCallsTest {
     final ClientCall<Integer, Integer> clientCall = channel.newCall(STREAMING_METHOD,
         CallOptions.DEFAULT);
 
-    ClientResponseObserver<Integer, Integer> responseObserver =
-        new ClientResponseObserver<Integer, Integer>() {
+    final SettableFuture<Void> future = SettableFuture.create();
+    ClientResponseObserver<Integer, Integer> responseObserver
+        = new ClientResponseObserver<Integer, Integer>() {
           @Override
           public void beforeStart(final ClientCallStreamObserver<Integer> requestStream) {
             requestStream.setOnReadyHandler(new Runnable() {
@@ -429,15 +418,23 @@ public class ClientCallsTest {
 
           @Override
           public void onError(Throwable t) {
+            future.setException(t);
           }
 
           @Override
           public void onCompleted() {
+            future.set(null);
           }
         };
 
     ClientCalls.asyncBidiStreamingCall(clientCall, responseObserver);
-    assertTrue(latch.await(5, TimeUnit.SECONDS));
+    ServerCallStreamObserver<Integer> serverCallObserver = observerFuture.get(5, TimeUnit.SECONDS);
+    serverCallObserver.request(1);
+    assertTrue(semaphore.tryAcquire(5, TimeUnit.SECONDS));
+    serverCallObserver.request(2);
+    assertTrue(semaphore.tryAcquire(5, TimeUnit.SECONDS));
+    serverCallObserver.request(3);
+    future.get(5, TimeUnit.SECONDS);
     // Verify that number of messages produced in each onReady handler call matches the number
     // requested by the client.
     assertEquals(Arrays.asList(0, 1, 1, 2, 2, 2), receivedMessages);
