@@ -430,8 +430,14 @@ public class ClientCallsTest {
     ClientCalls.asyncBidiStreamingCall(clientCall, responseObserver);
     ServerCallStreamObserver<Integer> serverCallObserver = observerFuture.get(5, TimeUnit.SECONDS);
     serverCallObserver.request(1);
+    if (future.isDone()) {
+      future.get();
+    }
     assertTrue(semaphore.tryAcquire(5, TimeUnit.SECONDS));
     serverCallObserver.request(2);
+    if (future.isDone()) {
+      future.get();
+    }
     assertTrue(semaphore.tryAcquire(5, TimeUnit.SECONDS));
     serverCallObserver.request(3);
     future.get(5, TimeUnit.SECONDS);
