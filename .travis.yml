@@ -14,6 +14,7 @@ before_install:
     ln -s /tmp/gradle-caches-modules-2 $HOME/.gradle/caches/modules-2
   - mkdir -p $HOME/.gradle &&
     ln -s /tmp/gradle-wrapper $HOME/.gradle/wrapper
+  - ln -s /tmp/m2 $HOME/.m2
   - buildscripts/make_dependencies.sh # build protoc into /tmp/protobuf
   - mkdir -p $HOME/.gradle
   - echo "checkstyle.ignoreFailures=false" >> $HOME/.gradle/gradle.properties
@@ -58,8 +59,10 @@ cache:
     - /tmp/protobuf-*
     - /tmp/gradle-caches-modules-2
     - /tmp/gradle-wrapper
+    - /tmp/m2
 
 before_cache:
   # The lock changes based on folder name; normally $HOME/.gradle/caches/modules-2/modules-2.lock
   - rm /tmp/gradle-caches-modules-2/gradle-caches-modules-2.lock
   - find $HOME/.gradle/wrapper -not -name "*-all.zip" -and -not -name "*-bin.zip" -delete
+  - rm -r /tmp/m2/repository/io/grpc/
