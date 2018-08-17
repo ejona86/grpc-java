@@ -14,7 +14,7 @@ before_install:
     ln -s /tmp/gradle-caches-modules-2 $HOME/.gradle/caches/modules-2
   - mkdir -p $HOME/.gradle &&
     ln -s /tmp/gradle-wrapper $HOME/.gradle/wrapper
-  - ln -s /tmp/m2 $HOME/.m2
+  - rm -r $HOME/.m2; ln -s /tmp/m2 $HOME/.m2
   - buildscripts/make_dependencies.sh # build protoc into /tmp/protobuf
   - mkdir -p $HOME/.gradle
   - echo "checkstyle.ignoreFailures=false" >> $HOME/.gradle/gradle.properties
