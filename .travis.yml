@@ -10,6 +10,9 @@ env:
     - LD_LIBRARY_PATH=/tmp/protobuf/lib
 
 before_install:
+  - cat ~/.m2/settings.xml || true
+  - mvn -X || true
+  - false
   - mkdir -p $HOME/.gradle/caches &&
     ln -s /tmp/gradle-caches-modules-2 $HOME/.gradle/caches/modules-2
   - mkdir -p $HOME/.gradle &&
@@ -47,8 +50,6 @@ jdk:
   # we finally move off of jdk8 and jdk9 we will need use the javac annotation
   # processor based plugin.
   - oraclejdk8  # if both jdk 8 and 9 are removed, migrate to net.ltgt.errorprone-javacplugin (see above comment)
-  - oraclejdk9  # if both jdk 8 and 9 are removed, migrate to net.ltgt.errorprone-javacplugin (see above comment)
-  - oraclejdk10
 
 notifications:
   email: false
