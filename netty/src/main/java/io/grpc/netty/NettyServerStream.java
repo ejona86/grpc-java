@@ -44,7 +44,7 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.handler.codec.http2.Http2Stream2;
+import io.netty.handler.codec.http2.Http2FrameStream;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -142,10 +142,10 @@ class NettyServerStream extends AbstractServerStream {
   /** This should only called from the transport thread. */
   public static class TransportState extends AbstractServerStream.TransportState {
 
-    private final Http2Stream2 http2Stream;
+    private final Http2FrameStream http2Stream;
     private final NettyServerHandler handler;
 
-    public TransportState(NettyServerHandler handler, Http2Stream2 http2Stream,
+    public TransportState(NettyServerHandler handler, Http2FrameStream http2Stream,
         int maxMessageSize, StatsTraceContext statsTraceCtx) {
       super(maxMessageSize, statsTraceCtx);
       this.handler = checkNotNull(handler, "handler");
@@ -171,7 +171,7 @@ class NettyServerStream extends AbstractServerStream {
       super.inboundDataReceived(new NettyReadableBuffer(frame.retain()), endOfStream);
     }
 
-    public Http2Stream2 http2Stream() {
+    public Http2FrameStream http2Stream() {
       return http2Stream;
     }
   }

@@ -45,12 +45,11 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.SharedResourceHolder.Resource;
-import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2InboundHeaders;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.handler.codec.http2.Http2Stream2Exception;
+import io.netty.handler.codec.http2.Http2FrameStreamException;
 import io.netty.util.AsciiString;
 import io.netty.util.concurrent.DefaultThreadFactory;
 
@@ -86,10 +85,6 @@ class Utils {
   static boolean validateHeaders = false;
 
   public static Metadata convertHeaders(Http2Headers http2Headers) {
-    if (http2Headers instanceof GrpcHttp2InboundHeaders) {
-      GrpcHttp2InboundHeaders h = (GrpcHttp2InboundHeaders) http2Headers;
-      return InternalMetadata.newMetadata(h.numHeaders(), h.namesAndValues());
-    }
     return InternalMetadata.newMetadata(convertHeadersToArray(http2Headers));
   }
 
@@ -137,10 +132,6 @@ class Utils {
   }
 
   public static Metadata convertTrailers(Http2Headers http2Headers) {
-    if (http2Headers instanceof GrpcHttp2InboundHeaders) {
-      GrpcHttp2InboundHeaders h = (GrpcHttp2InboundHeaders) http2Headers;
-      return InternalMetadata.newMetadata(h.numHeaders(), h.namesAndValues());
-    }
     return InternalMetadata.newMetadata(convertHeadersToArray(http2Headers));
   }
 
@@ -165,7 +156,7 @@ class Utils {
     if (t instanceof IOException) {
       return Status.UNAVAILABLE.withCause(t);
     }
-    if (t instanceof Http2Exception || t instanceof Http2Stream2Exception) {
+    if (t instanceof Http2Exception || t instanceof Http2FrameStreamException) {
       return Status.INTERNAL.withCause(t);
     }
     return s;

@@ -365,7 +365,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
     stream.start(listener);
     verify(listener, never()).onReady();
     assertFalse(stream.isReady());
-    stream().transportState().setHttp2Stream(new Http2Stream2Impl(channel).id(STREAM_ID));
+    stream().transportState().setHttp2Stream(new Http2FrameStreamImpl(channel).id(STREAM_ID));
     stream().transportState().onStreamActive();
     verify(listener).onReady();
     assertTrue(stream.isReady());
@@ -408,7 +408,7 @@ public class NettyClientStreamTest extends NettyStreamTestBase<NettyClientStream
         channel, AsciiString.of("localhost"), AsciiString.of("http"), AsciiString.of("agent"),
         StatsTraceContext.NOOP);
     stream.start(listener);
-    stream.transportState().setHttp2Stream(new Http2Stream2Impl(channel).id(STREAM_ID));
+    stream.transportState().setHttp2Stream(new Http2FrameStreamImpl(channel).id(STREAM_ID));
     stream.transportState().onStreamActive();
     reset(listener);
     return stream;

@@ -36,22 +36,22 @@ import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
 import io.grpc.Status;
-import io.netty.handler.codec.http2.Http2Stream2;
+import io.netty.handler.codec.http2.Http2FrameStream;
 
 /**
  * Command sent from a Netty server stream to the handler to cancel the stream.
  */
 class CancelServerStreamCommand extends WriteQueue.AbstractQueuedCommand {
-  private final Http2Stream2 http2Stream;
+  private final Http2FrameStream http2Stream;
   private final Status reason;
 
-  CancelServerStreamCommand(Http2Stream2 http2Stream, Status reason) {
+  CancelServerStreamCommand(Http2FrameStream http2Stream, Status reason) {
     this.http2Stream = Preconditions.checkNotNull(http2Stream, "http2Stream");
     this.reason = Preconditions.checkNotNull(reason, "reason");
   }
 
   @SuppressWarnings("unchecked")
-  Http2Stream2 http2Stream() {
+  Http2FrameStream http2Stream() {
     return http2Stream;
   }
 

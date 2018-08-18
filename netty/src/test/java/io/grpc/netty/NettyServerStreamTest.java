@@ -303,7 +303,7 @@ public class NettyServerStreamTest extends NettyStreamTestBase<NettyServerStream
 
     StatsTraceContext statsTraceCtx = StatsTraceContext.NOOP;
     NettyServerStream.TransportState state = new NettyServerStream.TransportState(
-        handler, new Http2Stream2Impl(channel), DEFAULT_MAX_MESSAGE_SIZE,
+        handler, new Http2FrameStreamImpl(channel), DEFAULT_MAX_MESSAGE_SIZE,
         statsTraceCtx);
     NettyServerStream stream = new NettyServerStream(channel, state, Attributes.EMPTY,
         statsTraceCtx);

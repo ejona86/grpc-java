@@ -51,7 +51,6 @@ import io.grpc.internal.GrpcUtil;
 import io.grpc.internal.ServerStreamListener;
 import io.grpc.internal.ServerTransportListener;
 import io.grpc.internal.StatsTraceContext;
-import io.grpc.netty.GrpcHttp2HeadersDecoder.GrpcHttp2ServerHeadersDecoder;
 import io.grpc.netty.NettyServerStream.TransportState;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
@@ -72,14 +71,13 @@ import io.netty.handler.codec.http2.Http2Exception.StreamException;
 import io.netty.handler.codec.http2.Http2FrameCodecBuilder;
 import io.netty.handler.codec.http2.Http2FrameLogger;
 import io.netty.handler.codec.http2.Http2Headers;
-import io.netty.handler.codec.http2.Http2HeadersDecoder;
 import io.netty.handler.codec.http2.Http2HeadersFrame;
 import io.netty.handler.codec.http2.Http2PingFrame;
 import io.netty.handler.codec.http2.Http2ResetFrame;
 import io.netty.handler.codec.http2.Http2Settings;
-import io.netty.handler.codec.http2.Http2Stream2;
-import io.netty.handler.codec.http2.Http2Stream2Exception;
-import io.netty.handler.codec.http2.Http2Stream2Visitor;
+import io.netty.handler.codec.http2.Http2FrameStream;
+import io.netty.handler.codec.http2.Http2FrameStreamException;
+import io.netty.handler.codec.http2.Http2FrameStreamVisitor;
 import io.netty.handler.logging.LogLevel;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.internal.PlatformDependent;
@@ -109,19 +107,9 @@ class NettyServerHandler extends AbstractNettyHandler {
                                        int flowControlWindow,
                                        int maxHeaderListSize,
                                        int maxMessageSize) {
-    Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
-
-    Http2HeadersDecoder headersDecoder = new GrpcHttp2ServerHeadersDecoder();
-    try {
-      headersDecoder.configuration().headerTable().maxHeaderListSize(maxHeaderListSize);
-    } catch (Http2Exception e) {
-      PlatformDependent.throwException(e);
-    }
-
     Http2FrameCodecBuilder builder = Http2FrameCodecBuilder
         .forServer()
-        .frameLogger(new Http2FrameLogger(LogLevel.DEBUG, NettyServerHandler.class))
-        .frameReader(new DefaultHttp2FrameReader(headersDecoder));
+        .frameLogger(new Http2FrameLogger(LogLevel.DEBUG, NettyServerHandler.class));
 
     return newHandler(builder, transportListener, maxStreams, flowControlWindow, maxHeaderListSize,
         maxMessageSize);
@@ -136,6 +124,7 @@ class NettyServerHandler extends AbstractNettyHandler {
                                        int maxMessageSize) {
     Preconditions.checkArgument(maxStreams > 0, "maxStreams must be positive");
     Preconditions.checkArgument(flowControlWindow > 0, "flowControlWindow must be positive");
+    Preconditions.checkArgument(maxHeaderListSize > 0, "maxHeaderListSize must be positive");
     Preconditions.checkArgument(maxMessageSize > 0, "maxMessageSize must be positive");
 
     frameCodecBuilder.initialSettings(
@@ -170,15 +159,15 @@ class NettyServerHandler extends AbstractNettyHandler {
     }
   }
 
-  private static TransportState requireTransportState(Http2Stream2 http2Stream) {
+  private static TransportState requireTransportState(Http2FrameStream http2Stream) {
     if (!(http2Stream.managedState() instanceof TransportState)) {
       throw new IllegalStateException("Must never happen.");
     }
     return (TransportState) http2Stream.managedState();
   }
 
-  private static void onRstStreamRead(Http2ResetFrame frame) throws Http2Stream2Exception {
-    Http2Stream2 http2Stream = frame.stream();
+  private static void onRstStreamRead(Http2ResetFrame frame) throws Http2FrameStreamException {
+    Http2FrameStream http2Stream = frame.stream();
     try {
       requireTransportState(http2Stream).transportReportStatus(Status.CANCELLED);
     } catch (Throwable e) {
@@ -198,7 +187,7 @@ class NettyServerHandler extends AbstractNettyHandler {
       teWarningLogged = true;
     }
 
-    final Http2Stream2 http2Stream = frame.stream();
+    final Http2FrameStream http2Stream = frame.stream();
 
     try {
       // Verify that the Content-Type is correct in the request.
@@ -225,11 +214,11 @@ class NettyServerHandler extends AbstractNettyHandler {
     }
   }
 
-  private void onDataRead(Http2DataFrame data) throws Http2Stream2Exception {
+  private void onDataRead(Http2DataFrame data) throws Http2FrameStreamException {
     flowControlPing().onDataRead(data.content().readableBytes(), data.padding());
     TransportState state = requireTransportState(data.stream());
     try {
-      state.inboundDataReceived(data.content(), data.endStream());
+      state.inboundDataReceived(data.content(), data.isEndStream());
     } catch (Throwable e) {
       logger.log(Level.WARNING, "Exception in onDataRead()", e);
       // Throw an exception that will get handled by onStreamError.
@@ -239,9 +228,9 @@ class NettyServerHandler extends AbstractNettyHandler {
 
   @Override
   public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-    if (cause instanceof Http2Stream2Exception) {
+    if (cause instanceof Http2FrameStreamException) {
       logger.log(Level.WARNING, "Stream Error", cause);
-      Http2Stream2Exception http2Exception = (Http2Stream2Exception) cause;
+      Http2FrameStreamException http2Exception = (Http2FrameStreamException) cause;
 
       // No managed state might be attached, when an exception is thrown before the server stream
       // has been properly initialized. Most likely if header validation failed.
@@ -265,17 +254,17 @@ class NettyServerHandler extends AbstractNettyHandler {
   }
 
   @Override
-  public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+  public void handlerAdded0(ChannelHandlerContext ctx) throws Exception {
     serverWriteQueue = new WriteQueue(ctx.channel());
     serverWriteQueue = new WriteQueue(ctx.channel());
     attributes = transportListener.transportReady(Attributes.newBuilder(protocolNegotationAttrs)
         .set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, ctx.channel().remoteAddress())
         .build());
-    super.handlerAdded(ctx);
+    super.handlerAdded0(ctx);
   }
 
-  public void onPingAckRead(ByteBuf data) throws Http2Exception {
-    if (data.getLong(data.readerIndex()) == flowControlPing().payload()) {
+  public void onPingAckRead(long payload) throws Http2Exception {
+    if (payload == flowControlPing().payload()) {
       flowControlPing().updateWindow();
       if (logger.isLoggable(Level.FINE)) {
         logger.log(Level.FINE, String.format("Window: %d",
@@ -299,9 +288,9 @@ class NettyServerHandler extends AbstractNettyHandler {
     try {
       final Status status =
           Status.UNAVAILABLE.withDescription("connection terminated for unknown reason");
-      forEachActiveStream(new Http2Stream2Visitor() {
+      forEachActiveStream(new Http2FrameStreamVisitor() {
         @Override
-        public boolean visit(Http2Stream2 http2Stream) {
+        public boolean visit(Http2FrameStream http2Stream) {
           requireTransportState(http2Stream).transportReportStatus(status);
           return true;
         }
@@ -345,7 +334,7 @@ class NettyServerHandler extends AbstractNettyHandler {
   /**
    * Returns the given processed bytes back to inbound flow control.
    */
-  void returnProcessedBytes(Http2Stream2 stream, int bytes) {
+  void returnProcessedBytes(Http2FrameStream stream, int bytes) {
     ctx().write(new DefaultHttp2WindowUpdateFrame(bytes).stream(stream));
   }
 
@@ -357,9 +346,9 @@ class NettyServerHandler extends AbstractNettyHandler {
   private void forcefulClose(final ChannelHandlerContext ctx, final ForcefulCloseCommand msg,
       ChannelPromise promise) throws Http2Exception {
     try {
-      forEachActiveStream(new Http2Stream2Visitor() {
+      forEachActiveStream(new Http2FrameStreamVisitor() {
         @Override
-        public boolean visit(Http2Stream2 http2Stream) {
+        public boolean visit(Http2FrameStream http2Stream) {
           requireTransportState(http2Stream).transportReportStatus(msg.getStatus());
           ctx.write(new DefaultHttp2ResetFrame(Http2Error.CANCEL).stream(http2Stream),
               ctx.voidPromise());
@@ -434,27 +423,27 @@ class NettyServerHandler extends AbstractNettyHandler {
     return path.subSequence(1, path.length()).toString();
   }
 
-  private static void verifyContentType(Http2Stream2 http2Stream, Http2Headers headers)
-      throws Http2Stream2Exception {
+  private static void verifyContentType(Http2FrameStream http2Stream, Http2Headers headers)
+      throws Http2FrameStreamException {
     CharSequence contentType = headers.get(CONTENT_TYPE_HEADER);
     if (contentType == null) {
       StreamException e = (StreamException) Http2Exception.streamError(http2Stream.id(),
           Http2Error.REFUSED_STREAM, "Content-Type is missing from the request");
-      throw new Http2Stream2Exception(http2Stream, Http2Error.REFUSED_STREAM, e);
+      throw new Http2FrameStreamException(http2Stream, Http2Error.REFUSED_STREAM, e);
     }
     String contentTypeString = contentType.toString();
     if (!GrpcUtil.isGrpcContentType(contentTypeString)) {
       StreamException e = (StreamException) Http2Exception.streamError(http2Stream.id(),
           Http2Error.REFUSED_STREAM, "Content-Type '%s' is not supported", contentTypeString);
-      throw new Http2Stream2Exception(http2Stream, Http2Error.REFUSED_STREAM, e);
+      throw new Http2FrameStreamException(http2Stream, Http2Error.REFUSED_STREAM, e);
     }
   }
 
-  private static Http2Stream2Exception newStreamException(Http2Stream2 http2Stream,
+  private static Http2FrameStreamException newStreamException(Http2FrameStream http2Stream,
       Throwable cause) {
-    if (cause instanceof Http2Stream2Exception) {
-      return (Http2Stream2Exception) cause;
+    if (cause instanceof Http2FrameStreamException) {
+      return (Http2FrameStreamException) cause;
     }
-    return new Http2Stream2Exception(http2Stream, INTERNAL_ERROR, cause);
+    return new Http2FrameStreamException(http2Stream, INTERNAL_ERROR, cause);
   }
 }

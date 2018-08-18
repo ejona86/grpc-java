@@ -53,7 +53,7 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
-import io.netty.handler.codec.http2.Http2Stream2;
+import io.netty.handler.codec.http2.Http2FrameStream;
 import io.netty.util.AsciiString;
 
 import javax.annotation.Nullable;
@@ -181,7 +181,7 @@ class NettyClientStream extends AbstractClientStream2 {
   /** This should only called from the transport thread. */
   public abstract static class TransportState extends Http2ClientStreamTransportState {
     private final NettyClientHandler handler;
-    private Http2Stream2 http2Stream;
+    private Http2FrameStream http2Stream;
 
     public TransportState(NettyClientHandler handler, int maxMessageSize,
         StatsTraceContext statsTraceCtx) {
@@ -209,15 +209,15 @@ class NettyClientStream extends AbstractClientStream2 {
      * Gets the underlying Netty {@link Http2Stream} for this stream.
      */
     @Nullable
-    public Http2Stream2 http2Stream() {
+    public Http2FrameStream http2Stream() {
       return http2Stream;
     }
 
     /**
-     * Sets the underlying Netty {@link Http2Stream2} for this stream. This must be called in the
+     * Sets the underlying Netty {@link Http2FrameStream} for this stream. This must be called in the
      * context of the transport thread.
      */
-    void setHttp2Stream(Http2Stream2 http2Stream) {
+    void setHttp2Stream(Http2FrameStream http2Stream) {
       checkNotNull(http2Stream, "http2Stream");
       checkState(this.http2Stream == null, "Can only set http2Stream once");
 

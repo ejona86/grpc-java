@@ -33,7 +33,6 @@ package io.grpc.netty;
 
 import static io.netty.buffer.Unpooled.directBuffer;
 import static io.netty.buffer.Unpooled.unreleasableBuffer;
-import static io.netty.handler.codec.http2.Http2Stream2.CONNECTION_STREAM;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -61,20 +60,19 @@ abstract class AbstractNettyHandler extends Http2ChannelDuplexHandler {
   private final Http2FrameCodec frameCodec;
 
   private static final int BDP_MEASUREMENT_PING = 1234;
-  private static final ByteBuf payloadBuf =
-      unreleasableBuffer(directBuffer(8).writeLong(BDP_MEASUREMENT_PING));
 
   AbstractNettyHandler(Http2FrameCodecBuilder frameCodecBuilder, int initialConnectionWindow) {
-    frameCodecBuilder.gracefulShutdownTimeout(GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS, SECONDS);
+    frameCodecBuilder.gracefulShutdownTimeoutMillis(
+        SECONDS.toMillis(GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS));
     frameCodec = frameCodecBuilder.build();
     flowControlPing = new FlowControlPinger(initialConnectionWindow);
   }
 
   @Override
-  public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
+  public void handlerAdded0(ChannelHandlerContext ctx) throws Exception {
     this.ctx = ctx;
     ctx.pipeline().addBefore(ctx.executor(), ctx.name(), null, frameCodec);
-    super.handlerAdded(ctx);
+    super.handlerAdded0(ctx);
   }
 
   /**
@@ -161,7 +159,7 @@ abstract class AbstractNettyHandler extends Http2ChannelDuplexHandler {
         lastBandwidth = bandwidth;
         int increase = targetWindow - initialConnectionWindow;
 
-        ctx().write(new DefaultHttp2WindowUpdateFrame(increase).stream(CONNECTION_STREAM));
+        ctx().write(new DefaultHttp2WindowUpdateFrame(increase).stream(null));
         Http2Settings updateInitialWindowSize = new Http2Settings().initialWindowSize(targetWindow);
         ctx().write(new DefaultHttp2SettingsFrame(updateInitialWindowSize));
 
@@ -181,7 +179,7 @@ abstract class AbstractNettyHandler extends Http2ChannelDuplexHandler {
     private void sendPing() {
       setDataSizeSincePing(0);
       lastPingTime = System.nanoTime();
-      ctx().write(new DefaultHttp2PingFrame(payloadBuf.slice()));
+      ctx().write(new DefaultHttp2PingFrame(BDP_MEASUREMENT_PING));
       pingCount++;
     }
 
