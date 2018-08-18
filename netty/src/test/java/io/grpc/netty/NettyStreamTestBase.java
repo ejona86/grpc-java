@@ -255,24 +255,8 @@ public abstract class NettyStreamTestBase<T extends Stream> {
     }
 
     @Override
-    public Http2FrameStream managedState(Object state) {
-      managedState = state;
-      return this;
-    }
-
-    @Override
-    public Object managedState() {
-      return managedState;
-    }
-
-    @Override
     public Http2Stream.State state() {
       return id == -1 ? Http2Stream.State.IDLE : Http2Stream.State.OPEN;
-    }
-
-    @Override
-    public ChannelFuture closeFuture() {
-      return closeFuture;
     }
   }
 }
