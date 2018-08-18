@@ -48,8 +48,8 @@ import io.grpc.internal.SharedResourceHolder.Resource;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.http2.Http2Exception;
-import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2FrameStreamException;
+import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.util.AsciiString;
 import io.netty.util.concurrent.DefaultThreadFactory;
 

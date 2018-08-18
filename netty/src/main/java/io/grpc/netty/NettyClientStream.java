@@ -51,9 +51,9 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.handler.codec.http2.Http2CodecUtil;
+import io.netty.handler.codec.http2.Http2FrameStream;
 import io.netty.handler.codec.http2.Http2Headers;
 import io.netty.handler.codec.http2.Http2Stream;
-import io.netty.handler.codec.http2.Http2FrameStream;
 import io.netty.util.AsciiString;
 
 import javax.annotation.Nullable;
@@ -215,8 +215,8 @@ class NettyClientStream extends AbstractClientStream2 {
     }
 
     /**
-     * Sets the underlying Netty {@link Http2FrameStream} for this stream. This must be called in the
-     * context of the transport thread.
+     * Sets the underlying Netty {@link Http2FrameStream} for this stream. This must be called in
+     * the context of the transport thread.
      */
     void setHttp2Stream(Http2FrameStream http2Stream) {
       checkNotNull(http2Stream, "http2Stream");
