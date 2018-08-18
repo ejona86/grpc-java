@@ -128,8 +128,8 @@ class NettyServerStream extends AbstractServerStream {
     @Override
     public void writeTrailers(Metadata trailers, boolean headersSent) {
       Http2Headers http2Trailers = Utils.convertTrailers(trailers, headersSent);
-      writeQueue.enqueue(new SendResponseHeadersCommand(transportState(),
-          http2Trailers, true), true);
+      writeQueue.enqueue(
+          new SendResponseHeadersCommand(transportState(), http2Trailers, true), true);
     }
 
     @Override
@@ -139,7 +139,8 @@ class NettyServerStream extends AbstractServerStream {
   }
 
   /** This should only called from the transport thread. */
-  public static class TransportState extends AbstractServerStream.TransportState {
+  public static class TransportState extends AbstractServerStream.TransportState
+      implements StreamIdHolder {
 
     private final Http2FrameStream http2Stream;
     private final NettyServerHandler handler;

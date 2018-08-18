@@ -31,47 +31,29 @@
 
 package io.grpc.netty;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufHolder;
 import io.netty.buffer.DefaultByteBufHolder;
 import io.netty.channel.ChannelPromise;
+import io.netty.handler.codec.http2.Http2FrameStream;
 
 /**
  * Command sent from the transport to the Netty channel to send a GRPC frame to the remote endpoint.
  */
 class SendGrpcFrameCommand extends DefaultByteBufHolder implements WriteQueue.QueuedCommand {
-  private final NettyServerStream.TransportState serverTransportState;
-  private final NettyClientStream.TransportState clientTransportState;
+  private final StreamIdHolder stream;
   private final boolean endStream;
 
   private ChannelPromise promise;
 
-  SendGrpcFrameCommand(NettyServerStream.TransportState serverTransportState, ByteBuf content,
-      boolean endStream) {
-    this(checkNotNull(serverTransportState, "serverTransportState"), null, content, endStream);
-  }
-
-  SendGrpcFrameCommand(NettyClientStream.TransportState clientTransportState, ByteBuf content,
-      boolean endStream) {
-    this(null, checkNotNull(clientTransportState, "clientTransportState"), content, endStream);
-  }
-
-  private SendGrpcFrameCommand(NettyServerStream.TransportState serverTransportState,
-      NettyClientStream.TransportState clientTransportState, ByteBuf content, boolean endStream) {
+  SendGrpcFrameCommand(StreamIdHolder stream, ByteBuf content, boolean endStream) {
     super(content);
-    this.serverTransportState = serverTransportState;
-    this.clientTransportState = clientTransportState;
+    this.stream = stream;
     this.endStream = endStream;
   }
 
-  NettyServerStream.TransportState serverTransportState() {
-    return serverTransportState;
-  }
-
-  NettyClientStream.TransportState clientTransportState() {
-    return clientTransportState;
+  Http2FrameStream http2Stream() {
+    return stream.http2Stream();
   }
 
   boolean endStream() {
@@ -80,14 +62,12 @@ class SendGrpcFrameCommand extends DefaultByteBufHolder implements WriteQueue.Qu
 
   @Override
   public ByteBufHolder copy() {
-    return new SendGrpcFrameCommand(serverTransportState, clientTransportState, content().copy(),
-        endStream);
+    return new SendGrpcFrameCommand(stream, content().copy(), endStream);
   }
 
   @Override
   public ByteBufHolder duplicate() {
-    return new SendGrpcFrameCommand(serverTransportState, clientTransportState,
-        content().duplicate(), endStream);
+    return new SendGrpcFrameCommand(stream, content().duplicate(), endStream);
   }
 
   @Override
@@ -120,15 +100,13 @@ class SendGrpcFrameCommand extends DefaultByteBufHolder implements WriteQueue.Qu
       return false;
     }
     SendGrpcFrameCommand thatCmd = (SendGrpcFrameCommand) that;
-    return thatCmd.clientTransportState == clientTransportState
-        && thatCmd.serverTransportState == serverTransportState
-        && thatCmd.endStream == endStream
+    return thatCmd.stream.equals(stream) && thatCmd.endStream == endStream
         && thatCmd.content().equals(content());
   }
 
   @Override
   public String toString() {
-    return getClass().getSimpleName() + "(stream="
+    return getClass().getSimpleName() + "(http2Stream=" + http2Stream()
         + ", endStream=" + endStream + ", content=" + content()
         + ")";
   }
@@ -136,7 +114,7 @@ class SendGrpcFrameCommand extends DefaultByteBufHolder implements WriteQueue.Qu
   @Override
   public int hashCode() {
     int hash = content().hashCode();
-    //hash = hash * 31 + http2Stream.hashCode();
+    hash = hash * 31 + stream.hashCode();
     if (endStream) {
       hash = -hash;
     }

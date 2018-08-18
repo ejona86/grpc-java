@@ -49,16 +49,18 @@ import io.netty.handler.codec.http2.Http2FrameCodec;
 import io.netty.handler.codec.http2.Http2FrameCodecBuilder;
 import io.netty.handler.codec.http2.Http2FrameStream;
 import io.netty.handler.codec.http2.Http2Settings;
+
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Base class for all Netty gRPC handlers. This class standardizes exception handling (always
  * shutdown the connection) as well as sending the initial connection window at startup.
  */
 abstract class AbstractNettyHandler extends Http2ChannelDuplexHandler {
-  private static final long GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS = 5;
-  private boolean autoTuneFlowControlOn;
+  private static long GRACEFUL_SHUTDOWN_TIMEOUT = SECONDS.toMillis(5);
+  private boolean autoTuneFlowControlOn = false;
   private ChannelHandlerContext ctx;
   private final FlowControlPinger flowControlPing;
   private final Http2FrameCodec frameCodec;
@@ -69,8 +71,7 @@ abstract class AbstractNettyHandler extends Http2ChannelDuplexHandler {
   private static final int BDP_MEASUREMENT_PING = 1234;
 
   AbstractNettyHandler(Http2FrameCodecBuilder frameCodecBuilder, int initialConnectionWindow) {
-    frameCodecBuilder.gracefulShutdownTimeoutMillis(
-        SECONDS.toMillis(GRACEFUL_SHUTDOWN_TIMEOUT_SECONDS));
+    frameCodecBuilder.gracefulShutdownTimeoutMillis(GRACEFUL_SHUTDOWN_TIMEOUT);
     frameCodec = frameCodecBuilder.build();
     flowControlPing = new FlowControlPinger(initialConnectionWindow);
   }
@@ -160,7 +161,7 @@ abstract class AbstractNettyHandler extends Http2ChannelDuplexHandler {
       }
       if (!isPinging()) {
         setPinging(true);
-        sendPing();
+        sendPing(ctx());
       }
       incrementDataSincePing(dataLength + paddingLength);
     }
@@ -170,11 +171,11 @@ abstract class AbstractNettyHandler extends Http2ChannelDuplexHandler {
         return;
       }
       pingReturn++;
-      long elapsedTime = System.nanoTime() - lastPingTime;
+      long elapsedTime = (System.nanoTime() - lastPingTime);
       if (elapsedTime == 0) {
         elapsedTime = 1;
       }
-      long bandwidth = getDataSincePing() * SECONDS.toNanos(1) / elapsedTime;
+      long bandwidth = (getDataSincePing() * TimeUnit.SECONDS.toNanos(1)) / elapsedTime;
       // Calculate new window size by doubling the observed BDP, but cap at max window
       int targetWindow = Math.min(getDataSincePing() * 2, MAX_WINDOW_SIZE);
       setPinging(false);
@@ -199,7 +200,7 @@ abstract class AbstractNettyHandler extends Http2ChannelDuplexHandler {
       pinging = pingOut;
     }
 
-    private void sendPing() {
+    private void sendPing(ChannelHandlerContext ctx) {
       setDataSizeSincePing(0);
       lastPingTime = System.nanoTime();
       ctx().write(new DefaultHttp2PingFrame(BDP_MEASUREMENT_PING));

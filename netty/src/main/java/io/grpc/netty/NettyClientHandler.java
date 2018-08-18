@@ -222,6 +222,7 @@ class NettyClientHandler extends AbstractNettyHandler {
     stream.transportDataReceived(data.content(), data.isEndStream());
   }
 
+
   /**
    * Handler for an inbound HTTP/2 RST_STREAM frame, terminating a stream.
    */
@@ -307,52 +308,51 @@ class NettyClientHandler extends AbstractNettyHandler {
     // application.
     ChannelPromise tempPromise = ctx().newPromise();
     ctx().write(new DefaultHttp2HeadersFrame(headers).stream(http2Stream), tempPromise)
-        .addListener(new ChannelFutureListener() {
-          @Override
-          public void operationComplete(ChannelFuture future) throws Exception {
-            if (future.isSuccess()) {
-              // Stream might have been buffered and cancelled in the meantime.
-              if (!stream.isClosed()) {
-                registerTransportState(http2Stream, stream);
-                lifecycleManager.notifyInUse(true);
-                lifecycleManager.notifyNewUser();
-                stream.onStreamActive();
-                http2Stream.closeFuture().addListener(onStreamClosedListener); // FIXME
+            .addListener(new ChannelFutureListener() {
+              @Override
+              public void operationComplete(ChannelFuture future) throws Exception {
+                if (future.isSuccess()) {
+                  // Stream might have been buffered and cancelled in the meantime.
+                  if (!stream.isClosed()) {
+                    registerTransportState(http2Stream, stream);
+                    lifecycleManager.notifyNewUser();
+                    stream.onStreamActive();
+                    http2Stream.closeFuture().addListener(onStreamClosedListener); // FIXME
+                  }
+
+                  // Just forward on the success status to the original promise.
+                  promise.setSuccess();
+                  return;
+                }
+
+                final Throwable cause = future.cause();
+
+                if (cause instanceof Http2NoMoreStreamIdsException) {
+                  logger.fine("Stream IDs have been exhausted for this connection. "
+                      + "Initiating graceful shutdown of the connection.");
+                  lifecycleManager.notifyShutdown(EXHAUSTED_STREAMS_STATUS);
+                  promise.setFailure(lifecycleManager.getShutdownThrowable());
+                  close(ctx(), ctx().newPromise());
+                  return;
+                }
+
+                if (cause instanceof StreamBufferingEncoder.Http2GoAwayException) {
+                  StreamBufferingEncoder.Http2GoAwayException e =
+                      (StreamBufferingEncoder.Http2GoAwayException) cause;
+                  lifecycleManager.notifyShutdown(statusFromGoAway(e.errorCode(), e.debugData()));
+                  promise.setFailure(lifecycleManager.getShutdownThrowable());
+                  return;
+                }
+
+                promise.setFailure(cause);
               }
-
-              // Just forward on the success status to the original promise.
-              promise.setSuccess();
-              return;
-            }
-
-            final Throwable cause = future.cause();
-
-            if (cause instanceof Http2NoMoreStreamIdsException) {
-              logger.fine("Stream IDs have been exhausted for this connection. "
-                  + "Initiating graceful shutdown of the connection.");
-              lifecycleManager.notifyShutdown(EXHAUSTED_STREAMS_STATUS);
-              promise.setFailure(lifecycleManager.getShutdownThrowable());
-              close(ctx(), ctx().newPromise());
-              return;
-            }
-
-            if (cause instanceof StreamBufferingEncoder.Http2GoAwayException) {
-              StreamBufferingEncoder.Http2GoAwayException e =
-                  (StreamBufferingEncoder.Http2GoAwayException) cause;
-              lifecycleManager.notifyShutdown(statusFromGoAway(e.errorCode(), e.debugData()));
-              promise.setFailure(lifecycleManager.getShutdownThrowable());
-              return;
-            }
-
-            promise.setFailure(cause);
-          }
-        });
+            });
   }
 
   /**
    * Cancels this stream.
    */
-  private static void cancelStream(ChannelHandlerContext ctx, CancelClientStreamCommand cmd,
+  private void cancelStream(ChannelHandlerContext ctx, CancelClientStreamCommand cmd,
       ChannelPromise promise) {
     NettyClientStream.TransportState stream = cmd.stream();
     stream.transportReportStatus(cmd.reason(), true, new Metadata());
@@ -363,11 +363,11 @@ class NettyClientHandler extends AbstractNettyHandler {
   /**
    * Sends the given GRPC frame for the stream.
    */
-  private static void sendGrpcFrame(ChannelHandlerContext ctx, SendGrpcFrameCommand cmd,
+  private void sendGrpcFrame(ChannelHandlerContext ctx, SendGrpcFrameCommand cmd,
       ChannelPromise promise) {
     // Note: no need to flush since this is handled by the outbound flow controller.
     ctx.write(new DefaultHttp2DataFrame(cmd.content(), cmd.endStream())
-        .stream(cmd.clientTransportState().http2Stream()), promise);
+        .stream(cmd.http2Stream()), promise);
   }
 
   /**
@@ -458,13 +458,13 @@ class NettyClientHandler extends AbstractNettyHandler {
     Status status = statusFromGoAway(goAway.errorCode(), ByteBufUtil.getBytes(goAway.content()));
     lifecycleManager.notifyShutdown(status);
     final Status goAwayStatus = lifecycleManager.getShutdownStatus();
+    final int lastKnownStream = goAway.lastStreamId();
     try {
-      final int lastStreamId = goAway.lastStreamId();
       forEachActiveStream(new Http2FrameStreamVisitor() {
         @Override
-        public boolean visit(Http2FrameStream http2Stream) {
-          if (http2Stream.id() > lastStreamId) {
-            NettyClientStream.TransportState clientStream = clientStream(http2Stream);
+        public boolean visit(Http2FrameStream stream) {
+          if (stream.id() > lastKnownStream) {
+            NettyClientStream.TransportState clientStream = clientStream(stream);
             if (clientStream != null) {
               clientStream.transportReportStatus(goAwayStatus, false, new Metadata());
             }
@@ -484,7 +484,7 @@ class NettyClientHandler extends AbstractNettyHandler {
     }
   }
 
-  private static Status statusFromGoAway(long errorCode, byte[] debugData) {
+  private Status statusFromGoAway(long errorCode, byte[] debugData) {
     Status status = GrpcUtil.Http2Error.statusForCode((int) errorCode)
         .augmentDescription("Received Goaway");
     if (debugData != null && debugData.length > 0) {
