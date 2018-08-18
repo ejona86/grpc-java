@@ -70,6 +70,7 @@ import io.netty.handler.codec.http2.Http2PingFrame;
 import io.netty.handler.codec.http2.Http2ResetFrame;
 import io.netty.handler.codec.http2.Http2Settings;
 import io.netty.handler.codec.http2.Http2SettingsFrame;
+import io.netty.handler.codec.http2.Http2Stream;
 import io.netty.handler.codec.http2.StreamBufferingEncoder;
 import io.netty.handler.logging.LogLevel;
 
@@ -300,7 +301,8 @@ class NettyClientHandler extends AbstractNettyHandler {
               public void operationComplete(ChannelFuture future) throws Exception {
                 if (future.isSuccess()) {
                   // Stream might have been buffered and cancelled in the meantime.
-                  if (!stream.isClosed()) {
+                  // FIXME: double-check that this check is actually correct
+                  if (http2Stream.state() != Http2Stream.State.CLOSED) {
                     registerTransportState(http2Stream, stream);
                     lifecycleManager.notifyNewUser();
                     stream.onStreamActive();
