@@ -201,7 +201,7 @@ class NettyServerHandler extends AbstractNettyHandler {
       // audit. It would be good to improve the API to be less prone to races.
       state.setListener(listener);
       registerTransportState(http2Stream, state);
-      http2Stream.closeFuture().deregisterWhenDestroyed(); // FIXME
+      //http2Stream.closeFuture().deregisterWhenDestroyed(); // FIXME
     } catch (Http2Exception e) {
       throw e;
     } catch (Throwable e) {

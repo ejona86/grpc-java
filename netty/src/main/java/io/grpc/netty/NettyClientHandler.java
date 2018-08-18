@@ -317,7 +317,7 @@ class NettyClientHandler extends AbstractNettyHandler {
                     registerTransportState(http2Stream, stream);
                     lifecycleManager.notifyNewUser();
                     stream.onStreamActive();
-                    http2Stream.closeFuture().addListener(onStreamClosedListener); // FIXME
+                    //http2Stream.closeFuture().addListener(onStreamClosedListener); // FIXME
                   }
 
                   // Just forward on the success status to the original promise.
