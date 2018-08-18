@@ -205,19 +205,12 @@ class NettyClientHandler extends AbstractNettyHandler {
     ctx().write(new DefaultHttp2WindowUpdateFrame(bytes).stream(http2Stream));
   }
 
-  private static NettyClientStream.TransportState requireTransportState(Http2FrameStream http2Stream) {
-    if (!(http2Stream.managedState() instanceof NettyClientStream.TransportState)) {
-      throw new IllegalStateException("Must never happen.");
-    }
-    return (NettyClientStream.TransportState) http2Stream.managedState();
-  }
-
   /**
    * Handler for an inbound HTTP/2 HEADERS frame.
    */
-  private static void onHeadersRead(Http2HeadersFrame headers) {
-    NettyClientStream.TransportState transportState = requireTransportState(headers.stream());
-    transportState.transportHeadersReceived(headers.headers(), headers.isEndStream());
+  private void onHeadersRead(Http2HeadersFrame headers) {
+    NettyClientStream.TransportState stream = requireClientStream(headers.stream());
+    stream.transportHeadersReceived(headers.headers(), headers.isEndStream());
   }
 
   /**
@@ -225,18 +218,20 @@ class NettyClientHandler extends AbstractNettyHandler {
    */
   private void onDataRead(Http2DataFrame data) {
     flowControlPing().onDataRead(data.content().readableBytes(), data.padding());
-    NettyClientStream.TransportState transportState = requireTransportState(data.stream());
-    transportState.transportDataReceived(data.content(), data.isEndStream());
+    NettyClientStream.TransportState stream = requireClientStream(data.stream());
+    stream.transportDataReceived(data.content(), data.isEndStream());
   }
 
   /**
    * Handler for an inbound HTTP/2 RST_STREAM frame, terminating a stream.
    */
-  private static void onRstStreamRead(Http2ResetFrame reset) {
-    NettyClientStream.TransportState transportState = requireTransportState(reset.stream());
-    Status status = GrpcUtil.Http2Error.statusForCode((int) reset.errorCode())
-        .augmentDescription("Received Rst Stream");
-    transportState.transportReportStatus(status, false /*stop delivery*/, new Metadata());
+  private void onRstStreamRead(Http2ResetFrame reset) {
+    NettyClientStream.TransportState stream = clientStream(reset.stream());
+    if (stream != null) {
+      Status status = GrpcUtil.Http2Error.statusForCode((int) reset.errorCode())
+          .augmentDescription("Received Rst Stream");
+      stream.transportReportStatus(status, false /*stop delivery*/, new Metadata());
+    }
   }
 
   @Override
@@ -261,7 +256,7 @@ class NettyClientHandler extends AbstractNettyHandler {
       forEachActiveStream(new Http2FrameStreamVisitor() {
         @Override
         public boolean visit(Http2FrameStream http2Stream) {
-          NettyClientStream .TransportState clientStream = requireTransportState(http2Stream);
+          NettyClientStream.TransportState clientStream = clientStream(http2Stream);
           if (clientStream != null) {
             clientStream.transportReportStatus(
                 lifecycleManager.getShutdownStatus(), false, new Metadata());
@@ -280,8 +275,7 @@ class NettyClientHandler extends AbstractNettyHandler {
     if (cause instanceof Http2FrameStreamException) {
       Http2FrameStreamException http2Exception = (Http2FrameStreamException) cause;
 
-      NettyClientStream.TransportState clientStream = (NettyClientStream.TransportState)
-          http2Exception.stream().managedState();
+      NettyClientStream.TransportState clientStream = clientStream(http2Exception.stream());
       clientStream.transportReportStatus(Utils.statusFromThrowable(cause), false, new Metadata());
       ctx.write(
           new DefaultHttp2ResetFrame(http2Exception.error()).stream(http2Exception.stream()));
@@ -319,9 +313,11 @@ class NettyClientHandler extends AbstractNettyHandler {
             if (future.isSuccess()) {
               // Stream might have been buffered and cancelled in the meantime.
               if (!stream.isClosed()) {
+                registerTransportState(http2Stream, stream);
+                lifecycleManager.notifyInUse(true);
                 lifecycleManager.notifyNewUser();
                 stream.onStreamActive();
-                http2Stream.closeFuture().addListener(onStreamClosedListener);
+                http2Stream.closeFuture().addListener(onStreamClosedListener); // FIXME
               }
 
               // Just forward on the success status to the original promise.
@@ -445,8 +441,10 @@ class NettyClientHandler extends AbstractNettyHandler {
     forEachActiveStream(new Http2FrameStreamVisitor() {
       @Override
       public boolean visit(Http2FrameStream http2Stream) {
-        NettyClientStream.TransportState clientStream = requireTransportState(http2Stream);
-        clientStream.transportReportStatus(msg.getStatus(), true, new Metadata());
+        NettyClientStream.TransportState clientStream = clientStream(http2Stream);
+        if (clientStream != null) {
+          clientStream.transportReportStatus(msg.getStatus(), true, new Metadata());
+        }
         ctx.write(new DefaultHttp2ResetFrame(Http2Error.CANCEL).stream(http2Stream));
         return true;
       }
@@ -466,7 +464,7 @@ class NettyClientHandler extends AbstractNettyHandler {
         @Override
         public boolean visit(Http2FrameStream http2Stream) {
           if (http2Stream.id() > lastStreamId) {
-            NettyClientStream.TransportState clientStream = requireTransportState(http2Stream);
+            NettyClientStream.TransportState clientStream = clientStream(http2Stream);
             if (clientStream != null) {
               clientStream.transportReportStatus(goAwayStatus, false, new Metadata());
             }
@@ -495,6 +493,21 @@ class NettyClientHandler extends AbstractNettyHandler {
       status = status.augmentDescription(msg);
     }
     return status;
+  }
+
+  /**
+   * Gets the client stream associated to the given HTTP/2 stream object.
+   */
+  private NettyClientStream.TransportState clientStream(Http2FrameStream stream) {
+    return (NettyClientStream.TransportState) transportState(stream);
+  }
+
+  private NettyClientStream.TransportState requireClientStream(Http2FrameStream stream) {
+    NettyClientStream.TransportState state = clientStream(stream);
+    if (state == null) {
+      throw new IllegalStateException("Could not find client stream state: " + stream.id());
+    }
+    return state;
   }
 
   @Override

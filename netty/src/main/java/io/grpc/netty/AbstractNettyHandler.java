@@ -38,6 +38,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import com.google.common.annotations.VisibleForTesting;
 
 import io.grpc.Attributes;
+import io.grpc.internal.AbstractStream2;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http2.DefaultHttp2PingFrame;
@@ -46,7 +47,10 @@ import io.netty.handler.codec.http2.DefaultHttp2WindowUpdateFrame;
 import io.netty.handler.codec.http2.Http2ChannelDuplexHandler;
 import io.netty.handler.codec.http2.Http2FrameCodec;
 import io.netty.handler.codec.http2.Http2FrameCodecBuilder;
+import io.netty.handler.codec.http2.Http2FrameStream;
 import io.netty.handler.codec.http2.Http2Settings;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Base class for all Netty gRPC handlers. This class standardizes exception handling (always
@@ -58,6 +62,9 @@ abstract class AbstractNettyHandler extends Http2ChannelDuplexHandler {
   private ChannelHandlerContext ctx;
   private final FlowControlPinger flowControlPing;
   private final Http2FrameCodec frameCodec;
+  // TODO(ejona): Are we concerned about this map consuming too much space when empty after a burst?
+  private final Map<Http2FrameStream, AbstractStream2.TransportState> streams =
+      new HashMap<Http2FrameStream, AbstractStream2.TransportState>();
 
   private static final int BDP_MEASUREMENT_PING = 1234;
 
@@ -102,6 +109,22 @@ abstract class AbstractNettyHandler extends Http2ChannelDuplexHandler {
   @VisibleForTesting
   void setAutoTuneFlowControl(boolean isOn) {
     autoTuneFlowControlOn = isOn;
+  }
+
+  protected void registerTransportState(
+      Http2FrameStream stream, AbstractStream2.TransportState state) {
+    AbstractStream2.TransportState removed = streams.put(stream, state);
+    assert removed == null;
+  }
+
+  protected void deregisterTransportState(
+      Http2FrameStream stream, AbstractStream2.TransportState state) {
+    AbstractStream2.TransportState removed = streams.remove(stream);
+    assert state == removed;
+  }
+
+  protected AbstractStream2.TransportState transportState(Http2FrameStream stream) {
+    return streams.get(stream);
   }
 
   /**

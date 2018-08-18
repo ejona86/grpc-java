@@ -222,7 +222,6 @@ class NettyClientStream extends AbstractClientStream2 {
       checkState(this.http2Stream == null, "Can only set http2Stream once");
 
       this.http2Stream = http2Stream;
-      http2Stream.managedState(this);
     }
 
     /**

@@ -134,8 +134,7 @@ class NettyServerStream extends AbstractServerStream {
 
     @Override
     public void cancel(Status status) {
-      writeQueue.enqueue(new CancelServerStreamCommand(transportState().http2Stream(), status),
-          true);
+      writeQueue.enqueue(new CancelServerStreamCommand(transportState(), status), true);
     }
   }
 
@@ -150,7 +149,6 @@ class NettyServerStream extends AbstractServerStream {
       super(maxMessageSize, statsTraceCtx);
       this.handler = checkNotNull(handler, "handler");
       this.http2Stream = checkNotNull(http2Stream, "http2Stream");
-      http2Stream.managedState(this);
     }
 
     @Override
@@ -164,7 +162,7 @@ class NettyServerStream extends AbstractServerStream {
       log.log(Level.WARNING, "Exception processing message", cause);
       Status status = Status.fromThrowable(cause);
       transportReportStatus(status);
-      handler.getWriteQueue().enqueue(new CancelServerStreamCommand(http2Stream(), status), true);
+      handler.getWriteQueue().enqueue(new CancelServerStreamCommand(this, status), true);
     }
 
     void inboundDataReceived(ByteBuf frame, boolean endOfStream) {

@@ -36,23 +36,21 @@ import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
 import io.grpc.Status;
-import io.netty.handler.codec.http2.Http2FrameStream;
 
 /**
  * Command sent from a Netty server stream to the handler to cancel the stream.
  */
 class CancelServerStreamCommand extends WriteQueue.AbstractQueuedCommand {
-  private final Http2FrameStream http2Stream;
+  private final NettyServerStream.TransportState stream;
   private final Status reason;
 
-  CancelServerStreamCommand(Http2FrameStream http2Stream, Status reason) {
-    this.http2Stream = Preconditions.checkNotNull(http2Stream, "http2Stream");
+  CancelServerStreamCommand(NettyServerStream.TransportState stream, Status reason) {
+    this.stream = Preconditions.checkNotNull(stream, "stream");
     this.reason = Preconditions.checkNotNull(reason, "reason");
   }
 
-  @SuppressWarnings("unchecked")
-  Http2FrameStream http2Stream() {
-    return http2Stream;
+  NettyServerStream.TransportState stream() {
+    return stream;
   }
 
   Status reason() {
@@ -70,19 +68,19 @@ class CancelServerStreamCommand extends WriteQueue.AbstractQueuedCommand {
 
     CancelServerStreamCommand that = (CancelServerStreamCommand) o;
 
-    return Objects.equal(this.http2Stream, that.http2Stream)
+    return Objects.equal(this.stream, that.stream)
         && Objects.equal(this.reason, that.reason);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(http2Stream, reason);
+    return Objects.hashCode(stream, reason);
   }
 
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
-        .add("stream", http2Stream)
+        .add("stream", stream)
         .add("reason", reason)
         .toString();
   }

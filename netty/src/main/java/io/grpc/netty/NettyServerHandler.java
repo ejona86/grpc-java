@@ -159,17 +159,13 @@ class NettyServerHandler extends AbstractNettyHandler {
     }
   }
 
-  private static TransportState requireTransportState(Http2FrameStream http2Stream) {
-    if (!(http2Stream.managedState() instanceof TransportState)) {
-      throw new IllegalStateException("Must never happen.");
-    }
-    return (TransportState) http2Stream.managedState();
-  }
-
-  private static void onRstStreamRead(Http2ResetFrame frame) throws Http2FrameStreamException {
+  private void onRstStreamRead(Http2ResetFrame frame) throws Http2FrameStreamException {
     Http2FrameStream http2Stream = frame.stream();
     try {
-      requireTransportState(http2Stream).transportReportStatus(Status.CANCELLED);
+      NettyServerStream.TransportState stream = serverStream(http2Stream);
+      if (stream != null) {
+        stream.transportReportStatus(Status.CANCELLED);
+      }
     } catch (Throwable e) {
       logger.log(Level.WARNING, "Exception in onRstStreamRead()", e);
       // Throw an exception that will get handled by onStreamError.
@@ -197,6 +193,8 @@ class NettyServerHandler extends AbstractNettyHandler {
       StatsTraceContext statsTraceCtx =
           checkNotNull(transportListener.methodDetermined(method, metadata), "statsTraceCtx");
       TransportState state = new TransportState(this, http2Stream, maxMessageSize, statsTraceCtx);
+      registerTransportState(http2Stream, state);
+      http2Stream.closeFuture().deregisterWhenDestroyed(); // FIXME
       NettyServerStream serverStream = new NettyServerStream(ctx().channel(), state, attributes,
           statsTraceCtx);
       ServerStreamListener listener =
@@ -216,9 +214,9 @@ class NettyServerHandler extends AbstractNettyHandler {
 
   private void onDataRead(Http2DataFrame data) throws Http2FrameStreamException {
     flowControlPing().onDataRead(data.content().readableBytes(), data.padding());
-    TransportState state = requireTransportState(data.stream());
     try {
-      state.inboundDataReceived(data.content(), data.isEndStream());
+      NettyServerStream.TransportState stream = requireServerStream(data.stream());
+      stream.inboundDataReceived(data.content(), data.isEndStream());
     } catch (Throwable e) {
       logger.log(Level.WARNING, "Exception in onDataRead()", e);
       // Throw an exception that will get handled by onStreamError.
@@ -231,12 +229,12 @@ class NettyServerHandler extends AbstractNettyHandler {
     if (cause instanceof Http2FrameStreamException) {
       logger.log(Level.WARNING, "Stream Error", cause);
       Http2FrameStreamException http2Exception = (Http2FrameStreamException) cause;
+      NettyServerStream.TransportState serverStream = serverStream(http2Exception.stream());
 
       // No managed state might be attached, when an exception is thrown before the server stream
       // has been properly initialized. Most likely if header validation failed.
-      if (http2Exception.stream().managedState() != null) {
-        TransportState clientState = requireTransportState(http2Exception.stream());
-        clientState.transportReportStatus(Utils.statusFromThrowable(cause));
+      if (serverStream != null) {
+        serverStream.transportReportStatus(Utils.statusFromThrowable(cause));
       }
 
       ctx.write(new DefaultHttp2ResetFrame(http2Exception.error()).stream(http2Exception.stream()));
@@ -291,7 +289,10 @@ class NettyServerHandler extends AbstractNettyHandler {
       forEachActiveStream(new Http2FrameStreamVisitor() {
         @Override
         public boolean visit(Http2FrameStream http2Stream) {
-          requireTransportState(http2Stream).transportReportStatus(status);
+          NettyServerStream.TransportState serverStream = serverStream(http2Stream);
+          if (serverStream != null) {
+            serverStream.transportReportStatus(status);
+          }
           return true;
         }
       });
@@ -348,10 +349,12 @@ class NettyServerHandler extends AbstractNettyHandler {
     try {
       forEachActiveStream(new Http2FrameStreamVisitor() {
         @Override
-        public boolean visit(Http2FrameStream http2Stream) {
-          requireTransportState(http2Stream).transportReportStatus(msg.getStatus());
-          ctx.write(new DefaultHttp2ResetFrame(Http2Error.CANCEL).stream(http2Stream),
-              ctx.voidPromise());
+        public boolean visit(Http2FrameStream stream) {
+          NettyServerStream.TransportState serverStream = serverStream(stream);
+          if (serverStream != null) {
+            serverStream.transportReportStatus(msg.getStatus());
+          }
+          ctx.write(new DefaultHttp2ResetFrame(Http2Error.CANCEL).stream(stream), ctx.newPromise());
           return true;
         }
       });
@@ -363,12 +366,11 @@ class NettyServerHandler extends AbstractNettyHandler {
   private static void cancelStream(ChannelHandlerContext ctx, CancelServerStreamCommand cmd,
       ChannelPromise promise) {
     // Notify the listener if we haven't already.
-    requireTransportState(cmd.http2Stream()).transportReportStatus(cmd.reason());
-
+    cmd.stream().transportReportStatus(cmd.reason());
     // Terminate the stream.
-    Http2ResetFrame resetFrame =
-        new DefaultHttp2ResetFrame(Http2Error.CANCEL).stream(cmd.http2Stream());
-    ctx.write(resetFrame, promise);
+    ctx.write(
+        new DefaultHttp2ResetFrame(Http2Error.CANCEL).stream(cmd.stream().http2Stream()),
+        promise);
   }
 
   /**
@@ -421,6 +423,21 @@ class NettyServerHandler extends AbstractNettyHandler {
           "Malformatted path: %s", path);
     }
     return path.subSequence(1, path.length()).toString();
+  }
+
+  /**
+   * Returns the server stream associated to the given HTTP/2 stream object.
+   */
+  private NettyServerStream.TransportState serverStream(Http2FrameStream stream) {
+    return (NettyServerStream.TransportState) transportState(stream);
+  }
+
+  private NettyServerStream.TransportState requireServerStream(Http2FrameStream stream) {
+    NettyServerStream.TransportState state = serverStream(stream);
+    if (state == null) {
+      throw new IllegalStateException("Could not find server stream state: " + stream.id());
+    }
+    return state;
   }
 
   private static void verifyContentType(Http2FrameStream http2Stream, Http2Headers headers)
