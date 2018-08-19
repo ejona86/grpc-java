@@ -127,7 +127,7 @@ public class GrpcProxy<ReqT, RespT> implements ServerCallHandler<ReqT, RespT> {
         serverCallListener.onClientReady();
       }
 
-      void onServerReady() {
+      synchronized void onServerReady() {
         if (needToRequest) {
           serverCallListener.clientCall.request(1);
           needToRequest = false;
