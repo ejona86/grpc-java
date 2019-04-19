@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package grpc.build_defs_test;
+option java_package = "grpc.builddefstest";
+
+import "java/grpc/builddefstest/message.proto";
+
+service SeparateService {
+  // Use your imagination.
+  rpc TheMethod(SeparateRequest) returns (SeparateResponse);
+}

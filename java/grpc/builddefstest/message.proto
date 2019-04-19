@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package grpc.build_defs_test;
+option java_package = "grpc.builddefstest";
+
+message SeparateRequest {}
+message SeparateResponse {}
