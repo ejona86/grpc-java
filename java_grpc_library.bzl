@@ -19,7 +19,7 @@ def _java_rpc_library_impl(ctx):
                "same package as consuming rule").format(ctx.label, ctx.attr.srcs[0].label))
 
     srcs = ctx.attr.srcs[0][ProtoInfo].direct_sources
-    includes = ctx.attr.srcs[0][ProtoInfo].transitive_imports
+    descriptor_set_in = ctx.attr.srcs[0][ProtoInfo].transitive_descriptor_sets
     flavor = ctx.attr.flavor
     if flavor == "normal":
         flavor = ""
@@ -29,11 +29,11 @@ def _java_rpc_library_impl(ctx):
     args = ctx.actions.args()
     args.add(ctx.executable._java_plugin.path, format = "--plugin=protoc-gen-grpc-java=%s")
     args.add("--grpc-java_out={0}:{1}".format(flavor, srcjar.path))
-    args.add_all(includes, map_each = _create_include_path)
+    args.add_joined("--descriptor_set_in", descriptor_set_in, join_with = ":")
     args.add_all(srcs, map_each = _path_ignoring_repository)
 
     ctx.actions.run(
-        inputs = depset(srcs, transitive = [includes]),
+        inputs = depset(srcs, transitive = [descriptor_set_in]),
         outputs = [srcjar],
         tools = [ctx.executable._java_plugin],
         executable = ctx.executable._protoc,

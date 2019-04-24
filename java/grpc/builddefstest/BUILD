@@ -99,3 +99,25 @@ android_binary(
     manifest = "AndroidManifest.xml",
     deps = [":consumer_android"],
 )
+
+proto_library(
+    name = "foo1_proto",
+    srcs = ["foo1.proto"],
+    deps = [":foo2_proto"],
+)
+
+proto_library(
+    name = "foo2_proto",
+    srcs = ["foo2.proto"],
+)
+
+java_proto_library(
+    name = "foo1_java_proto",
+    deps = [":foo1_proto"],
+)
+
+java_grpc_library(
+    name = "foo1_java_grpc",
+    srcs = [":foo1_proto"],
+    deps = [":foo1_java_proto"],
+)
