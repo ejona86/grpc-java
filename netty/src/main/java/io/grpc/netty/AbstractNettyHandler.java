@@ -254,7 +254,9 @@ abstract class AbstractNettyHandler extends GrpcHttp2ConnectionHandler {
 
     @Override
     public void onData(int streamId, ByteBuf data, int padding, boolean endStream) {
-      pingCount = 0;
+      if (data.isReadable()) {
+        pingCount = 0;
+      }
       super.onData(streamId, data, padding, endStream);
     }
   }
