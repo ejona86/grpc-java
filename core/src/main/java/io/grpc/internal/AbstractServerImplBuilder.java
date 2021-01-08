@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import com.google.common.base.MoreObjects;
+import com.infradna.tool.bridge_method_injector.WithBridgeMethods;
 import io.grpc.BinaryLog;
 import io.grpc.BindableService;
 import io.grpc.CompressorRegistry;
@@ -43,8 +44,8 @@ import javax.annotation.Nullable;
  * @param <T> The concrete type of this builder.
  * @see <a href="https://github.com/grpc/grpc-java/issues/7211">grpc/grpc-java#7211</a>
  */
-public abstract class AbstractServerImplBuilder
-    <T extends AbstractServerImplBuilder<T>> extends ServerBuilder<T> {
+public abstract class AbstractServerImplBuilder<T extends ServerBuilder<T>>
+    extends ServerBuilder<T> {
 
   /** The default constructor. */
   protected AbstractServerImplBuilder() {}
@@ -62,96 +63,112 @@ public abstract class AbstractServerImplBuilder
   protected abstract ServerBuilder<?> delegate();
 
   @Override
+  @WithBridgeMethods(value=AbstractServerImplBuilder.class, castRequired=true)
   public T directExecutor() {
     delegate().directExecutor();
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractServerImplBuilder.class, castRequired=true)
   public T executor(@Nullable Executor executor) {
     delegate().executor(executor);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractServerImplBuilder.class, castRequired=true)
   public T addService(ServerServiceDefinition service) {
     delegate().addService(service);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractServerImplBuilder.class, castRequired=true)
   public T addService(BindableService bindableService) {
     delegate().addService(bindableService);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractServerImplBuilder.class, castRequired=true)
   public T intercept(ServerInterceptor interceptor) {
     delegate().intercept(interceptor);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractServerImplBuilder.class, castRequired=true)
   public T addTransportFilter(ServerTransportFilter filter) {
     delegate().addTransportFilter(filter);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractServerImplBuilder.class, castRequired=true)
   public T addStreamTracerFactory(ServerStreamTracer.Factory factory) {
     delegate().addStreamTracerFactory(factory);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractServerImplBuilder.class, castRequired=true)
   public T fallbackHandlerRegistry(@Nullable HandlerRegistry fallbackRegistry) {
     delegate().fallbackHandlerRegistry(fallbackRegistry);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractServerImplBuilder.class, castRequired=true)
   public T useTransportSecurity(File certChain, File privateKey) {
     delegate().useTransportSecurity(certChain, privateKey);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractServerImplBuilder.class, castRequired=true)
   public T useTransportSecurity(InputStream certChain, InputStream privateKey) {
     delegate().useTransportSecurity(certChain, privateKey);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractServerImplBuilder.class, castRequired=true)
   public T decompressorRegistry(@Nullable DecompressorRegistry registry) {
     delegate().decompressorRegistry(registry);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractServerImplBuilder.class, castRequired=true)
   public T compressorRegistry(@Nullable CompressorRegistry registry) {
     delegate().compressorRegistry(registry);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractServerImplBuilder.class, castRequired=true)
   public T handshakeTimeout(long timeout, TimeUnit unit) {
     delegate().handshakeTimeout(timeout, unit);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractServerImplBuilder.class, castRequired=true)
   public T maxInboundMessageSize(int bytes) {
     delegate().maxInboundMessageSize(bytes);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractServerImplBuilder.class, castRequired=true)
   public T maxInboundMetadataSize(int bytes) {
     delegate().maxInboundMetadataSize(bytes);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractServerImplBuilder.class, castRequired=true)
   public T setBinaryLog(BinaryLog binaryLog) {
     delegate().setBinaryLog(binaryLog);
     return thisT();

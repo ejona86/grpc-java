@@ -17,6 +17,7 @@
 package io.grpc.internal;
 
 import com.google.common.base.MoreObjects;
+import com.infradna.tool.bridge_method_injector.WithBridgeMethods;
 import io.grpc.BinaryLog;
 import io.grpc.ClientInterceptor;
 import io.grpc.CompressorRegistry;
@@ -38,8 +39,8 @@ import javax.annotation.Nullable;
  * @param <T> The concrete type of this builder.
  * @see <a href="https://github.com/grpc/grpc-java/issues/7211">grpc/grpc-java#7211</a>
  */
-public abstract class AbstractManagedChannelImplBuilder
-    <T extends AbstractManagedChannelImplBuilder<T>> extends ManagedChannelBuilder<T> {
+public abstract class AbstractManagedChannelImplBuilder<T extends ManagedChannelBuilder<T>>
+    extends ManagedChannelBuilder<T> {
 
   /**
    * The default constructor.
@@ -66,54 +67,63 @@ public abstract class AbstractManagedChannelImplBuilder
   protected abstract ManagedChannelBuilder<?> delegate();
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T directExecutor() {
     delegate().directExecutor();
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T executor(Executor executor) {
     delegate().executor(executor);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T offloadExecutor(Executor executor) {
     delegate().offloadExecutor(executor);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T intercept(List<ClientInterceptor> interceptors) {
     delegate().intercept(interceptors);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T intercept(ClientInterceptor... interceptors) {
     delegate().intercept(interceptors);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T userAgent(String userAgent) {
     delegate().userAgent(userAgent);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T overrideAuthority(String authority) {
     delegate().overrideAuthority(authority);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T usePlaintext() {
     delegate().usePlaintext();
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T useTransportSecurity() {
     delegate().useTransportSecurity();
     return thisT();
@@ -121,132 +131,154 @@ public abstract class AbstractManagedChannelImplBuilder
 
   @Deprecated
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T nameResolverFactory(NameResolver.Factory resolverFactory) {
     delegate().nameResolverFactory(resolverFactory);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T defaultLoadBalancingPolicy(String policy) {
     delegate().defaultLoadBalancingPolicy(policy);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T enableFullStreamDecompression() {
     delegate().enableFullStreamDecompression();
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T decompressorRegistry(DecompressorRegistry registry) {
     delegate().decompressorRegistry(registry);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T compressorRegistry(CompressorRegistry registry) {
     delegate().compressorRegistry(registry);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T idleTimeout(long value, TimeUnit unit) {
     delegate().idleTimeout(value, unit);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T maxInboundMessageSize(int max) {
     delegate().maxInboundMessageSize(max);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T maxInboundMetadataSize(int max) {
     delegate().maxInboundMetadataSize(max);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T keepAliveTime(long keepAliveTime, TimeUnit timeUnit) {
     delegate().keepAliveTime(keepAliveTime, timeUnit);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T keepAliveTimeout(long keepAliveTimeout, TimeUnit timeUnit) {
     delegate().keepAliveTimeout(keepAliveTimeout, timeUnit);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T keepAliveWithoutCalls(boolean enable) {
     delegate().keepAliveWithoutCalls(enable);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T maxRetryAttempts(int maxRetryAttempts) {
     delegate().maxRetryAttempts(maxRetryAttempts);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T maxHedgedAttempts(int maxHedgedAttempts) {
     delegate().maxHedgedAttempts(maxHedgedAttempts);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T retryBufferSize(long bytes) {
     delegate().retryBufferSize(bytes);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T perRpcBufferLimit(long bytes) {
     delegate().perRpcBufferLimit(bytes);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T disableRetry() {
     delegate().disableRetry();
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T enableRetry() {
     delegate().enableRetry();
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T setBinaryLog(BinaryLog binaryLog) {
     delegate().setBinaryLog(binaryLog);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T maxTraceEvents(int maxTraceEvents) {
     delegate().maxTraceEvents(maxTraceEvents);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T proxyDetector(ProxyDetector proxyDetector) {
     delegate().proxyDetector(proxyDetector);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T defaultServiceConfig(@Nullable Map<String, ?> serviceConfig) {
     delegate().defaultServiceConfig(serviceConfig);
     return thisT();
   }
 
   @Override
+  @WithBridgeMethods(value=AbstractManagedChannelImplBuilder.class, castRequired=true)
   public T disableServiceConfigLookUp() {
     delegate().disableServiceConfigLookUp();
     return thisT();

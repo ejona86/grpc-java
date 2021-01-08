@@ -1,3 +1,9 @@
+buildscript {
+    dependencies {
+        classpath 'com.infradna.tool:bridge-method-injector:1.18'
+    }
+}
+
 plugins {
     id "java-library"
     id "maven-publish"
@@ -7,6 +13,8 @@ plugins {
     id "ru.vyarus.animalsniffer"
 }
 
+import com.infradna.tool.bridge_method_injector.MethodInjector;
+
 description = 'gRPC: Core'
 
 evaluationDependsOn(project(':grpc-context').path)
@@ -14,6 +22,9 @@ evaluationDependsOn(project(':grpc-api').path)
 
 dependencies {
     api project(':grpc-api')
+    compileOnlyApi ('com.infradna.tool:bridge-method-annotation:1.18') {
+        exclude group: 'org.jenkins-ci', module: 'annotation-indexer'
+    }
     implementation libraries.gson,
             libraries.android_annotations,
             libraries.animalsniffer_annotations,
@@ -57,6 +68,15 @@ plugins.withId("java") {
     compileJmhJava {
         // This project targets Java 7 (no method references)
         options.errorprone.check("UnnecessaryAnonymousClass", CheckSeverity.OFF)
+    }
+
+    compileJava {
+        doLast {
+            new MethodInjector().handle(destinationDirectory.file(
+                "io/grpc/internal/AbstractManagedChannelImplBuilder.class").get().getAsFile());
+            new MethodInjector().handle(destinationDirectory.file(
+                "io/grpc/internal/AbstractServerImplBuilder.class").get().getAsFile());
+        }
     }
 }
 
