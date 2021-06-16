@@ -12,7 +12,6 @@ on:
 
 permissions:
   contents: read
-  checks: write
 
 jobs:
   tests:
@@ -20,6 +19,7 @@ jobs:
     strategy:
       matrix:
         jre: [8, 11]
+      fail-fast: false # Should swap to true if we grow a large matrix
 
     steps:
     - uses: actions/checkout@v2
@@ -57,22 +57,8 @@ jobs:
     - name: Check for modified codegen
       run: test -z "$(git status --porcelain)" || (git status && echo Error Working directory is not clean. Forget to commit generated files? && false)
 
-    - name: Coveralls Parallel
-      uses: coverallsapp/github-action@master
-      with:
-        github-token: ${{ secrets.github_token }} # Updates checks UI
-        flag-name: jre-${{ matrix.jre }}
-        parallel: true
+    - name: Coveralls
+      if: matrix.jre == 8 # Upload once, instead of for each job in the matrix
+      run: ./gradlew :grpc-all:coveralls
     - name: Codecov
       uses: codecov/codecov-action@v1
-
-
-  finish:
-    needs: tests
-    runs-on: ubuntu-latest
-    steps:
-    - name: Coveralls Finished
-      uses: coverallsapp/github-action@master
-      with:
-        github-token: ${{ secrets.github_token }} # Updates checks UI
-        parallel-finished: true
