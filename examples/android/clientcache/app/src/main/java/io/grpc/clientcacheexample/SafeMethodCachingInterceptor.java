@@ -162,140 +162,159 @@ final class SafeMethodCachingInterceptor implements ClientInterceptor {
 
   @Override
   public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
-      final MethodDescriptor<ReqT, RespT> method, final CallOptions callOptions, Channel next) {
+      final MethodDescriptor<ReqT, RespT> method, final CallOptions callOptions,
+      final Channel next) {
     // Currently only unary methods can be marked safe, but check anyways.
     if (!method.isSafe() || method.getType() != MethodDescriptor.MethodType.UNARY) {
+      return next.newCall(method, callOptions);
+    }
+    boolean noCache = callOptions.getOption(NO_CACHE_CALL_OPTION);
+    boolean onlyIfCached = callOptions.getOption(ONLY_IF_CACHED_CALL_OPTION);
+    if (noCache) {
+      if (onlyIfCached) {
+        return new FailingClientCall(Status.UNAVAILABLE
+            .withDescription("Unsatisfiable Request (no-cache and only-if-cached conflict)"));
+      }
       return next.newCall(method, callOptions);
     }
 
     final String fullMethodName = method.getFullMethodName();
 
-    return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
-        next.newCall(method, callOptions)) {
+    return new ForwardingClientCall<ReqT, RespT>() {
+      private ClientCall<ReqT, RespT> delegate;
+      private Listener<RespT> responseListener;
+      private Metadata headers;
       private Listener<RespT> interceptedListener;
-      private Key requestKey;
-      private boolean cacheResponse = true;
-      private volatile String cacheOptionsErrorMsg;
+
+      @Override protected ClientCall<ReqT, RespT> delegate() {
+        if (delegate == null) {
+          throw new UnsupportedOperationException();
+        }
+        return delegate;
+      }
 
       @Override
       public void start(Listener<RespT> responseListener, Metadata headers) {
-        interceptedListener =
-            new ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT>(
-                responseListener) {
-              private Deadline deadline;
-              private int maxAge = -1;
-
-              @Override
-              public void onHeaders(Metadata headers) {
-                Iterable<String> cacheControlHeaders = headers.getAll(CACHE_CONTROL_KEY);
-                if (cacheResponse && cacheControlHeaders != null) {
-                  for (String cacheControlHeader : cacheControlHeaders) {
-                    for (String directive : CACHE_CONTROL_SPLITTER.split(cacheControlHeader)) {
-                      if (directive.equalsIgnoreCase("no-cache")) {
-                        cacheResponse = false;
-                        break;
-                      } else if (directive.equalsIgnoreCase("no-store")) {
-                        cacheResponse = false;
-                        break;
-                      } else if (directive.equalsIgnoreCase("no-transform")) {
-                        cacheResponse = false;
-                        break;
-                      } else if (directive.toLowerCase(Locale.US).startsWith("max-age")) {
-                        String[] parts = directive.split("=");
-                        if (parts.length == 2) {
-                          try {
-                            maxAge = Integer.parseInt(parts[1]);
-                          } catch (NumberFormatException e) {
-                            Log.e(TAG, "max-age directive failed to parse", e);
-                            continue;
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-                if (cacheResponse) {
-                  if (maxAge > -1) {
-                    deadline = Deadline.after(maxAge, TimeUnit.SECONDS);
-                  } else {
-                    deadline = Deadline.after(defaultMaxAge, TimeUnit.SECONDS);
-                  }
-                }
-                super.onHeaders(headers);
-              }
-
-              @Override
-              public void onMessage(RespT message) {
-                if (cacheResponse && !deadline.isExpired()) {
-                  Value value = new Value((MessageLite) message, deadline);
-                  internalCache.put(requestKey, value);
-                }
-                super.onMessage(message);
-              }
-
-              @Override
-              public void onClose(Status status, Metadata trailers) {
-                if (cacheOptionsErrorMsg != null) {
-                  // UNAVAILABLE is the canonical gRPC mapping for HTTP response code 504 (as used
-                  // by the built-in Android HTTP request cache).
-                  super.onClose(
-                      Status.UNAVAILABLE.withDescription(cacheOptionsErrorMsg), new Metadata());
-                } else {
-                  super.onClose(status, trailers);
-                }
-              }
-            };
-        delegate().start(interceptedListener, headers);
+        this.headers = headers;
+        this.responseListener = responseListener;
       }
 
       @Override
       public void sendMessage(ReqT message) {
-        boolean noCache = callOptions.getOption(NO_CACHE_CALL_OPTION);
-        boolean onlyIfCached = callOptions.getOption(ONLY_IF_CACHED_CALL_OPTION);
-
-        if (noCache) {
-          if (onlyIfCached) {
-            cacheOptionsErrorMsg = "Unsatisfiable Request (no-cache and only-if-cached conflict)";
-            super.cancel(cacheOptionsErrorMsg, null);
-            return;
-          }
-          cacheResponse = false;
-          super.sendMessage(message);
-          return;
-        }
-
         // Check the cache
-        requestKey = new Key(fullMethodName, (MessageLite) message);
+        Key requestKey = new Key(method.getFullMethodName(), (MessageLite) message);
         Value cachedResponse = internalCache.get(requestKey);
         if (cachedResponse != null) {
           if (cachedResponse.maxAgeDeadline.isExpired()) {
             internalCache.remove(requestKey);
           } else {
-            cacheResponse = false; // already cached
-            interceptedListener.onMessage((RespT) cachedResponse.response);
-            Metadata metadata = new Metadata();
-            interceptedListener.onClose(Status.OK, metadata);
+            delegate = new NoopClientCall<ReqT, RespT>();
+            responseListener.onHeaders(new Metadata());
+            responseListener.onMessage((RespT) cachedResponse.response);
+            responseListener.onClose(Status.OK, new Metadata());
             return;
           }
         }
 
-        if (onlyIfCached) {
-          cacheOptionsErrorMsg =
-              "Unsatisfiable Request (only-if-cached set, but value not in cache)";
-          super.cancel(cacheOptionsErrorMsg, null);
-          return;
-        }
+        // Actually need to issue an RPC
+        delegate = next.newCall(method, callOptions);
+        super.start(new CachingListener(responseListener, cacheKey), headers);
+        headers = null; // No longer safe to access, since not thread-safe
         super.sendMessage(message);
       }
-
-      @Override
-      public void halfClose() {
-        if (cacheOptionsErrorMsg != null) {
-          // already canceled
-          return;
-        }
-        super.halfClose();
-      }
     };
+  }
+
+  private static class CachingListener<RespT>
+      extends ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT> {
+    private final Key requestKey;
+    private boolean cacheResponse = true;
+    private Deadline deadline;
+
+    public CachingListener(ClientCall.Listener<RespT> responseListener, Key requestKey) {
+      super(responseListener);
+      this.requestKey = requestKey;
+    }
+
+    @Override
+    public void onHeaders(Metadata headers) {
+      // Should really include headers in the cached value
+      int maxAge = -1;
+      Iterable<String> cacheControlHeaders = headers.getAll(CACHE_CONTROL_KEY);
+      if (cacheResponse && cacheControlHeaders != null) {
+        for (String cacheControlHeader : cacheControlHeaders) {
+          for (String directive : CACHE_CONTROL_SPLITTER.split(cacheControlHeader)) {
+            if (directive.equalsIgnoreCase("no-cache")) {
+              cacheResponse = false;
+              break;
+            } else if (directive.equalsIgnoreCase("no-store")) {
+              cacheResponse = false;
+              break;
+            } else if (directive.equalsIgnoreCase("no-transform")) {
+              cacheResponse = false;
+              break;
+            } else if (directive.toLowerCase(Locale.US).startsWith("max-age")) {
+              String[] parts = directive.split("=");
+              if (parts.length == 2) {
+                try {
+                  maxAge = Integer.parseInt(parts[1]);
+                } catch (NumberFormatException e) {
+                  Log.e(TAG, "max-age directive failed to parse", e);
+                  continue;
+                }
+              }
+            }
+          }
+        }
+      }
+      if (cacheResponse) {
+        if (maxAge > -1) {
+          deadline = Deadline.after(maxAge, TimeUnit.SECONDS);
+        } else {
+          deadline = Deadline.after(defaultMaxAge, TimeUnit.SECONDS);
+        }
+      }
+      super.onHeaders(headers);
+    }
+
+    @Override
+    public void onMessage(RespT message) {
+      if (cacheResponse && !deadline.isExpired()) {
+        Value value = new Value((MessageLite) message, deadline);
+        internalCache.put(requestKey, value);
+      }
+      super.onMessage(message);
+    }
+
+    @Override
+    public void onClose(Status status, Metadata trailers) {
+      // Should really include trailers in the cached value
+      super.onClose(status, trailers);
+    }
+  }
+
+  public static class NoopClientCall<ReqT, RespT> extends ClientCall<ReqT, RespT> {
+    @Override public void start(ClientCall.Listener<RespT> listener, Metadata headers) {}
+
+    @Override public void request(int numMessages) {}
+
+    @Override public void cancel(String message, Throwable cause) {}
+
+    @Override public void halfClose() {}
+
+    @Override public void sendMessage(ReqT message) {}
+  }
+
+  static final class FailingClientCall<ReqT, RespT> extends NoopClientCall<ReqT, RespT> {
+    private final Status error;
+
+    public FailingClientCall(Status error) {
+      this.error = error;
+    }
+
+    @Override
+    public void start(ClientCall.Listener<RespT> listener, Metadata headers) {
+      listener.onClose(error, new Metadata());
+    }
   }
 }
