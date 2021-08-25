@@ -184,6 +184,7 @@ final class SafeMethodCachingInterceptor implements ClientInterceptor {
       private ClientCall<ReqT, RespT> delegate;
       private Listener<RespT> responseListener;
       private Metadata headers;
+      private int requestTokens;
       private Listener<RespT> interceptedListener;
 
       @Override protected ClientCall<ReqT, RespT> delegate() {
@@ -197,6 +198,15 @@ final class SafeMethodCachingInterceptor implements ClientInterceptor {
       public void start(Listener<RespT> responseListener, Metadata headers) {
         this.headers = headers;
         this.responseListener = responseListener;
+      }
+
+      @Override
+      public void request(int requests) {
+        if (delegate == null) {
+          requestTokens += requests;
+          return;
+        }
+        super.request(requests);
       }
 
       @Override
@@ -215,17 +225,29 @@ final class SafeMethodCachingInterceptor implements ClientInterceptor {
             return;
           }
         }
+        boolean onlyIfCached = callOptions.getOption(ONLY_IF_CACHED_CALL_OPTION);
+        if (onlyIfCached) {
+          delegate = new NoopClientCall<ReqT, RespT>();
+          Status status = Status.UNAVAILABLE.withDescription(
+              "Unsatisfiable Request (only-if-cached set, but value not in cache)");
+          responseListener.onClose(status, new Metadata());
+          return;
+        }
 
         // Actually need to issue an RPC
         delegate = next.newCall(method, callOptions);
-        super.start(new CachingListener(responseListener, cacheKey), headers);
+        super.start(new CachingListener(responseListener, requestKey), headers);
         headers = null; // No longer safe to access, since not thread-safe
+        if (requestTokens > 0) {
+          super.request(requestTokens);
+          requestTokens = 0;
+        }
         super.sendMessage(message);
       }
     };
   }
 
-  private static class CachingListener<RespT>
+  private class CachingListener<RespT>
       extends ForwardingClientCallListener.SimpleForwardingClientCallListener<RespT> {
     private final Key requestKey;
     private boolean cacheResponse = true;
