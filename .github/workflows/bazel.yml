@@ -1,0 +1,32 @@
+name: Bazel
+
+on:
+  push:
+    branches:
+    - master
+    - 'v1.*'
+  pull_request:
+  schedule:
+  - cron: '9 22 * * SUN' # weekly at a "random" time
+
+permissions:
+  contents: read
+
+env:
+  USE_BAZEL_VERSION: 5.0.0
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: actions/checkout@v2
+
+      - name: Bazel cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/bazel
+          key: ${{ runner.os }}-bazel-${{ env.USE_BAZEL_VERSION }}-${{ hashFiles('WORKSPACE', 'repositories.bzl') }}
+
+      - name: Run bazel build
+        run: bazelisk build //...
