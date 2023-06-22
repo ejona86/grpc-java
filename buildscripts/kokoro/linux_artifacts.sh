@@ -5,6 +5,7 @@ if [[ -f /VERSION ]]; then
   cat /VERSION
 fi
 
+readonly ANDROID_CMDLINE_TOOLS_VERSION=9477386
 readonly GRPC_JAVA_DIR="$(cd "$(dirname "$0")"/../.. && pwd)"
 
 . "$GRPC_JAVA_DIR"/buildscripts/kokoro/kokoro.sh
@@ -15,13 +16,21 @@ trap spongify_logs EXIT
 
 # grpc-android, grpc-cronet and grpc-binder require the Android SDK, so build outside of Docker and
 # use --include-build for its grpc-core dependency
-#echo y | ${ANDROID_HOME}/tools/bin/sdkmanager "build-tools;28.0.3"
-echo y | /opt/android-sdk/tools/bin/sdkmanager "build-tools;28.0.3"
+if [[ -z "${ANDROID_HOME+x}" ]]; then
+  export ANDROID_HOME=/tmp/Android/Sdk
+  mkdir -p "$ANDROID_HOME/cmdline-tools"
+  curl -Ls -o commandlinetools.zip \
+    "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_CMDLINE_TOOLS_VERSION}_latest.zip"
+  unzip -d "$ANDROID_HOME/cmdline-tools" commandlinetools.zip
+  mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+fi
+[[ -f "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]] || echo "Missing Android package cmdline-tools;latest"
+(yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
 
 # The sdkmanager needs Java 8, but now we switch to 11 as the Android builds
 # require it
-sudo update-java-alternatives --set java-1.11.0-openjdk-amd64
-unset JAVA_HOME
+#sudo update-java-alternatives --set java-1.11.0-openjdk-amd64
+#unset JAVA_HOME
 
 LOCAL_MVN_TEMP=$(mktemp -d)
 GRADLE_FLAGS="-Pandroid.useAndroidX=true"

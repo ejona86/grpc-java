@@ -16,7 +16,8 @@ export CXXFLAGS=-I/tmp/protobuf/include
 export LD_LIBRARY_PATH=/tmp/protobuf/lib
 export OS_NAME=$(uname)
 
-echo y | ${ANDROID_HOME}/tools/bin/sdkmanager "build-tools;28.0.3"
+[[ -f "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]] || echo "Missing Android package cmdline-tools;latest"
+(yes || true) | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses
 
 # Proto deps
 buildscripts/make_dependencies.sh
