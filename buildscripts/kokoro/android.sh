@@ -23,6 +23,7 @@ cat <<EOF >> gradle.properties
 org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=1024m
 EOF
 
+[[ -f "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]] || echo "Missing Android package cmdline-tools;latest"
 (yes || true) | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses
 
 # Proto deps
