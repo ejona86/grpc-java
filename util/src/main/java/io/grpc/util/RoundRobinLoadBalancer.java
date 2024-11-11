@@ -28,9 +28,13 @@ import com.google.common.base.Preconditions;
 import io.grpc.ConnectivityState;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
+import io.grpc.LoadBalancerProvider;
 import io.grpc.NameResolver;
+import io.grpc.Status;
+import io.grpc.internal.PickFirstLoadBalancerProvider;
+import io.grpc.util.LoadBalancerCollection.ChildLbState;
+import io.grpc.util.LoadBalancerCollection.Endpoint;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
@@ -40,54 +44,68 @@ import java.util.concurrent.atomic.AtomicInteger;
  * A {@link LoadBalancer} that provides round-robin load-balancing over the {@link
  * EquivalentAddressGroup}s from the {@link NameResolver}.
  */
-final class RoundRobinLoadBalancer extends MultiChildLoadBalancer {
+final class RoundRobinLoadBalancer extends LoadBalancer {
+  private final Helper helper;
+  private final LoadBalancerCollection<Endpoint, Void> children =
+      new LoadBalancerCollection<>(this::createChildLb);
   private final AtomicInteger sequence = new AtomicInteger(new Random().nextInt());
+  private final LoadBalancerProvider pickFirstLbProvider = new PickFirstLoadBalancerProvider();
   private SubchannelPicker currentPicker = new FixedResultPicker(PickResult.withNoResult());
+  private ConnectivityState currentConnectivityState;
 
   public RoundRobinLoadBalancer(Helper helper) {
-    super(helper);
+    this.helper = helper;
   }
 
-  /**
-   * Updates picker with the list of active subchannels (state == READY).
-   */
   @Override
-  protected void updateOverallBalancingState() {
-    List<ChildLbState> activeList = getReadyChildren();
-    if (activeList.isEmpty()) {
-      // No READY subchannels
+  public void handleNameResolutionError(Status error) {
+    if (currentConnectivityState != READY)  {
+      helper.updateBalancingState(
+          TRANSIENT_FAILURE, new FixedResultPicker(PickResult.withError(error)));
+    }
+  }
 
-      // RRLB will request connection immediately on subchannel IDLE.
-      boolean isConnecting = false;
-      for (ChildLbState childLbState : getChildLbStates()) {
-        ConnectivityState state = childLbState.getCurrentState();
-        if (state == CONNECTING || state == IDLE) {
-          isConnecting = true;
-          break;
-        }
-      }
+  @Override
+  public Status acceptResolvedAddresses(ResolvedAddresses resolvedAddresses) {
+    if (resolvedAddresses.getAddresses().isEmpty()) {
+      Status unavailableStatus = Status.UNAVAILABLE.withDescription(
+          "NameResolver returned no usable address. " + resolvedAddresses);
+      handleNameResolutionError(unavailableStatus);
+      return unavailableStatus;
+    }
 
-      if (isConnecting) {
+    Status status = children.acceptResolvedAddresses(
+        LoadBalancerCollection.createChildAddressesMap(resolvedAddresses));
+    updateOverallBalancingState();
+    return status;
+  }
+
+  private void updateOverallBalancingState() {
+    ConnectivityState state = children.getAggregateState();
+    switch (state) {
+      case TRANSIENT_FAILURE:
+      case READY:
+        updateBalancingState(state, createReadyPicker(children.getChildLbStates(state)));
+        break;
+      case IDLE: // RRLB will request connection immediately on subchannel IDLE.
+      case CONNECTING:
         updateBalancingState(CONNECTING, new FixedResultPicker(PickResult.withNoResult()));
-      } else {
-        updateBalancingState(TRANSIENT_FAILURE, createReadyPicker(getChildLbStates()));
-      }
-    } else {
-      updateBalancingState(READY, createReadyPicker(activeList));
+        break;
+      default:
     }
   }
 
   private void updateBalancingState(ConnectivityState state, SubchannelPicker picker) {
     if (state != currentConnectivityState || !picker.equals(currentPicker)) {
-      getHelper().updateBalancingState(state, picker);
+      helper.updateBalancingState(state, picker);
       currentConnectivityState = state;
       currentPicker = picker;
     }
   }
 
-  private SubchannelPicker createReadyPicker(Collection<ChildLbState> children) {
-    List<SubchannelPicker> pickerList = new ArrayList<>();
-    for (ChildLbState child : children) {
+  private SubchannelPicker createReadyPicker(List<ChildLbState<Endpoint, Void>> children) {
+    List<SubchannelPicker> pickerList = new ArrayList<>(children.size());
+    for (ChildLbState<?, ?> child : children) {
       SubchannelPicker picker = child.getCurrentPicker();
       pickerList.add(picker);
     }
@@ -96,21 +114,30 @@ final class RoundRobinLoadBalancer extends MultiChildLoadBalancer {
   }
 
   @Override
-  protected ChildLbState createChildLbState(Object key) {
-    return new ChildLbState(key, pickFirstLbProvider) {
+  public void shutdown() {
+    children.shutdown();
+  }
+
+  private LoadBalancer createChildLb(ChildLbState<Endpoint, ?> state) {
+    return pickFirstLbProvider.newLoadBalancer(new ForwardingLoadBalancerHelper() {
       @Override
-      protected ChildLbStateHelper createChildHelper() {
-        return new ChildLbStateHelper() {
-          @Override
-          public void updateBalancingState(ConnectivityState newState, SubchannelPicker newPicker) {
-            super.updateBalancingState(newState, newPicker);
-            if (!resolvingAddresses && newState == IDLE) {
-              getLb().requestConnection();
-            }
-          }
-        };
+      public void updateBalancingState(ConnectivityState newState, SubchannelPicker newPicker) {
+        state.updateBalancingState(newState, newPicker);
+        // If we are already in the process of resolving addresses, the overall balancing state
+        // will be updated at the end of it, and we don't need to trigger that update here.
+        if (children.isStateSettled()) {
+          updateOverallBalancingState();
+        }
+        if (newState == IDLE) {
+          state.getLb().requestConnection();
+        }
       }
-    };
+
+      @Override
+      public Helper delegate() {
+        return helper;
+      }
+    });
   }
 
   @VisibleForTesting

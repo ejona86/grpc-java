@@ -395,9 +395,7 @@ public class RoundRobinLoadBalancerTest {
     final Subchannel readySubchannel = subchannels.values().iterator().next();
     assertThat(addressesAcceptanceStatus.isOk()).isTrue();
     deliverSubchannelState(readySubchannel, ConnectivityStateInfo.forNonError(READY));
-    loadBalancer.resolvingAddresses = true;
     loadBalancer.handleNameResolutionError(Status.NOT_FOUND.withDescription("nameResolutionError"));
-    loadBalancer.resolvingAddresses = false;
 
     verify(mockHelper, times(3)).createSubchannel(any(CreateSubchannelArgs.class));
     verify(mockHelper, times(2))
