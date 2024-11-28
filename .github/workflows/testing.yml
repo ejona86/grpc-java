@@ -78,11 +78,10 @@ jobs:
   bazel:
     runs-on: ubuntu-latest
     strategy:
-      matrix:
-        - bazel: 6.0.0
-          bzlmod: false
-        - bazel: 7.0.0
-          bzlmod: true
+      - matrix.bazel: 6.0.0
+        matrix.bzlmod: false
+      - matrix.bazel: 7.0.0
+        matrix.bzlmod: true
     env:
       USE_BAZEL_VERSION: ${{ matrix.bazel }}
 
