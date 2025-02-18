@@ -19,7 +19,13 @@ set PATH=C:\Program Files\OpenJDK\openjdk-11.0.12_7\bin;%PATH%
 
 mkdir grpc-java-helper32
 cd grpc-java-helper32
-call "%VS140COMNTOOLS%\vsvars32.bat" || exit /b 1
+@rem call "%VS140COMNTOOLS%\vsvars32.bat" || exit /b 1
+@rem call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\Common7\Tools\VsDevCmd.bat" || exit /b 1
+dir "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\"
+dir "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\Common7\"
+dir "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\Common7\Tools\"
+
+call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\Common7\VC\Auxiliary\Build\vcvars32.bat" || exit /b 1
 call "%WORKSPACE%\buildscripts\make_dependencies.bat" || exit /b 1
 
 cd "%WORKSPACE%"
