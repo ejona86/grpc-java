@@ -17,9 +17,13 @@ set ESCWORKSPACE=%WORKSPACE:\=\\%
 set JAVA_HOME=
 set PATH=C:\Program Files\OpenJDK\openjdk-11.0.12_7\bin;%PATH%
 
+for /f "usebackq delims=" %%i in (`vswhere -version "[16.0,17.0)" -property installationPath`) do (
+  set VSDIR=%%i
+)
+
 mkdir grpc-java-helper32
 cd grpc-java-helper32
-call "%VS140COMNTOOLS%\vsvars32.bat" || exit /b 1
+call "%VSDIR%\Common7\Tools\VsDevCmd.bat" -arch=x86 || exit /b 1
 call "%WORKSPACE%\buildscripts\make_dependencies.bat" || exit /b 1
 
 cd "%WORKSPACE%"
