@@ -20,7 +20,7 @@ if not exist "%CMAKE_NAME%" (
 set PATH=%PATH%;%cd%\%CMAKE_NAME%\bin
 :hasCmake
 @rem GitHub requires TLSv1.2, and for whatever reason our powershell doesn't have it enabled
-powershell -command "$ErrorActionPreference = 'stop'; & { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; iwr https://github.com/google/protobuf/archive/v%PROTOBUF_VER%.zip -OutFile protobuf.zip }" || exit /b 1
+powershell -command "$ErrorActionPreference = 'stop'; $ProgressPreference = 'SilentlyContinue'; & { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 ; iwr https://github.com/google/protobuf/archive/v%PROTOBUF_VER%.zip -OutFile protobuf.zip }" || exit /b 1
 powershell -command "$ErrorActionPreference = 'stop'; & { Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('protobuf.zip', '.') }" || exit /b 1
 del protobuf.zip
 mkdir protobuf-%PROTOBUF_VER%\build
@@ -45,7 +45,7 @@ goto :eof
 
 :installCmake
 
-powershell -command "$ErrorActionPreference = 'stop'; & { iwr https://cmake.org/files/v3.3/%CMAKE_NAME%.zip -OutFile cmake.zip }" || exit /b 1
+powershell -command "$ErrorActionPreference = 'stop'; $ProgressPreference = 'SilentlyContinue'; & { iwr https://cmake.org/files/v3.3/%CMAKE_NAME%.zip -OutFile cmake.zip }" || exit /b 1
 powershell -command "$ErrorActionPreference = 'stop'; & { Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('cmake.zip', '.') }" || exit /b 1
 del cmake.zip
 goto :eof
