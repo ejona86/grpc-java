@@ -24,6 +24,7 @@ for /f "usebackq delims=" %%i in (`vswhere -version "[16.0,17.0)" -property inst
 mkdir grpc-java-helper32
 cd grpc-java-helper32
 call "%VSDIR%\Common7\Tools\VsDevCmd.bat" -arch=x86 || exit /b 1
+echo on
 call "%WORKSPACE%\buildscripts\make_dependencies.bat" || exit /b 1
 
 cd "%WORKSPACE%"
