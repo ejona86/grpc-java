@@ -36,7 +36,7 @@ if "%PLATFORM%" == "X64" (
 ) else (
   SET CMAKE_VSARCH=
 )
-cmake -Dprotobuf_BUILD_TESTS=OFF -G "Visual Studio %VisualStudioVersion:~0,2%%CMAKE_VSARCH%" .. || exit /b 1
+cmake -Dprotobuf_BUILD_TESTS=OFF -G "Visual Studio 16 2019" .. || exit /b 1
 msbuild /maxcpucount /p:Configuration=Release /verbosity:minimal libprotoc.vcxproj || exit /b 1
 call extract_includes.bat || exit /b 1
 popd
