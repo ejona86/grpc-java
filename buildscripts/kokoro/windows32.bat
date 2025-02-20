@@ -26,8 +26,9 @@ cd grpc-java-helper32
 dir "%VSDIR%"
 dir "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\"
 dir "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\"
-dir "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Axiliary\"
-dir "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Axiliary\Build\"
+dir "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\"
+dir "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\"
+"C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvars32.bat" || exit /b 1
 rem call "%VSDIR%\Common7\Tools\VsDevCmd.bat" -arch=x86 || exit /b 1
 echo on
 cmake --version
