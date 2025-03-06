@@ -722,7 +722,6 @@ public class XdsDependencyManagerTest {
 
   @Test
   public void testCdsError() throws IOException {
-    String cluster1 = "cluster-01.googleapis.com";
     // CLUSTER (aggr.) -> [cluster1]
 
     FakeXdsClient fakeXdsClient = new FakeXdsClient();
@@ -852,16 +851,6 @@ public class XdsDependencyManagerTest {
     private ResourceWatcher<XdsRouteConfigureResource.RdsUpdate> rdsWatcher;
     private final Map<String, List<ResourceWatcher<CdsUpdate>>> cdsWatchers = new HashMap<>();
     private final Map<String, List<ResourceWatcher<EdsUpdate>>> edsWatchers = new HashMap<>();
-
-    private void deliverCdsResourceNotExist(String clusterName) {
-      if (!cdsWatchers.containsKey(clusterName)) {
-        return;
-      }
-      syncContext.execute(() -> {
-        ImmutableList.copyOf(cdsWatchers.get(clusterName))
-            .forEach(w -> w.onResourceDoesNotExist(clusterName));
-      });
-    }
 
     private void deliverCdsError(String clusterName, Status error) {
       if (!cdsWatchers.containsKey(clusterName)) {

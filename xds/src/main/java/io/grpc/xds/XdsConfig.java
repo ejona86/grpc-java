@@ -101,21 +101,6 @@ final class XdsConfig {
     return clusters;
   }
 
-  public XdsConfigBuilder toBuilder() {
-    XdsConfigBuilder builder = new XdsConfigBuilder()
-        .setVirtualHost(getVirtualHost())
-        .setRoute(getRoute())
-        .setListener(getListener());
-
-    if (clusters != null) {
-      for (Map.Entry<String, StatusOr<XdsClusterConfig>> entry : clusters.entrySet()) {
-        builder.addCluster(entry.getKey(), entry.getValue());
-      }
-    }
-
-    return builder;
-  }
-
   static final class XdsClusterConfig {
     private final String clusterName;
     private final CdsUpdate clusterResource;

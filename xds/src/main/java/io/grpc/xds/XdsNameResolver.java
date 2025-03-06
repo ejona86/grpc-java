@@ -239,12 +239,6 @@ final class XdsNameResolver extends NameResolver {
   }
 
   @Override
-  public void refresh() {
-    super.refresh();
-    resolveState2.xdsDependencyManager.requestReresolution();
-  }
-
-  @Override
   public void shutdown() {
     logger.log(XdsLogLevel.INFO, "Shutdown");
     if (resolveState2 != null) {
