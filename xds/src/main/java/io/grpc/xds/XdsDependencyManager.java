@@ -61,8 +61,6 @@ final class XdsDependencyManager implements XdsConfig.XdsClusterSubscriptionRegi
   public static final XdsClusterResource CLUSTER_RESOURCE = XdsClusterResource.getInstance();
   public static final XdsEndpointResource ENDPOINT_RESOURCE = XdsEndpointResource.getInstance();
   private static final int MAX_CLUSTER_RECURSION_DEPTH = 16; // Matches C++
-  public static final StatusOr<XdsEndpointResource.EdsUpdate> LOGICAL_DNS_NOT_IMPLEMENTED =
-      StatusOr.fromStatus(Status.UNAVAILABLE.withDescription("Logical DNS not implemented"));
   private final XdsClient xdsClient;
   private final XdsConfigWatcher xdsConfigWatcher;
   private final SynchronizationContext syncContext;

@@ -62,7 +62,6 @@ import io.grpc.xds.VirtualHost.Route.RouteMatch;
 import io.grpc.xds.XdsNameResolverProvider.CallCounterProvider;
 import io.grpc.xds.client.Bootstrapper.AuthorityInfo;
 import io.grpc.xds.client.Bootstrapper.BootstrapInfo;
-import io.grpc.xds.client.Locality;
 import io.grpc.xds.client.XdsClient;
 import io.grpc.xds.client.XdsLogger;
 import io.grpc.xds.client.XdsLogger.XdsLogLevel;
@@ -98,9 +97,6 @@ final class XdsNameResolver extends NameResolver {
       CallOptions.Key.create("io.grpc.xds.RPC_HASH_KEY");
   static final CallOptions.Key<Boolean> AUTO_HOST_REWRITE_KEY =
       CallOptions.Key.create("io.grpc.xds.AUTO_HOST_REWRITE_KEY");
-  // DNS-resolved endpoints do not have the definition of the locality it belongs to, just hardcode
-  // to an empty locality.
-  static final Locality LOGICAL_DNS_CLUSTER_LOCALITY = Locality.create("", "", "");
   @VisibleForTesting
   static boolean enableTimeout =
       Strings.isNullOrEmpty(System.getenv("GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT"))
@@ -136,7 +132,7 @@ final class XdsNameResolver extends NameResolver {
   private ObjectPool<XdsClient> xdsClientPool;
   private XdsClient xdsClient;
   private CallCounterProvider callCounterProvider;
-  private ResolveState2 resolveState2;
+  private ResolveState resolveState;
   // Workaround for https://github.com/grpc/grpc-java/issues/8886 . This should be handled in
   // XdsClient instead of here.
   private boolean receivedConfig;
@@ -173,14 +169,13 @@ final class XdsNameResolver extends NameResolver {
     this.serviceConfigParser = checkNotNull(serviceConfigParser, "serviceConfigParser");
     this.syncContext = checkNotNull(syncContext, "syncContext");
     this.scheduler = checkNotNull(scheduler, "scheduler");
-    this.xdsClientPoolFactory = bootstrapOverride == null
-                                ? checkNotNull(xdsClientPoolFactory, "xdsClientPoolFactory")
-                                : new SharedXdsClientPoolProvider();
+    this.xdsClientPoolFactory = bootstrapOverride == null ? checkNotNull(xdsClientPoolFactory,
+            "xdsClientPoolFactory") : new SharedXdsClientPoolProvider();
     this.xdsClientPoolFactory.setBootstrapOverride(bootstrapOverride);
     this.random = checkNotNull(random, "random");
     this.filterRegistry = checkNotNull(filterRegistry, "filterRegistry");
     this.metricRecorder = metricRecorder;
-    this.nameResolverArgs = nameResolverArgs;
+    this.nameResolverArgs = checkNotNull(nameResolverArgs, "nameResolverArgs");
 
     randomChannelId = random.nextLong();
     logId = InternalLogId.allocate("xds-resolver", name);
@@ -231,7 +226,7 @@ final class XdsNameResolver extends NameResolver {
     ldsResourceName = XdsClient.canonifyResourceName(ldsResourceName);
     callCounterProvider = SharedCallCounterMap.getInstance();
 
-    resolveState2 = new ResolveState2(ldsResourceName); // auto starts
+    resolveState = new ResolveState(ldsResourceName); // auto starts
   }
 
   private static String expandPercentS(String template, String replacement) {
@@ -241,8 +236,8 @@ final class XdsNameResolver extends NameResolver {
   @Override
   public void shutdown() {
     logger.log(XdsLogLevel.INFO, "Shutdown");
-    if (resolveState2 != null) {
-      resolveState2.shutdown();
+    if (resolveState != null) {
+      resolveState.shutdown();
     }
     if (xdsClient != null) {
       xdsClient = xdsClientPool.returnObject(xdsClient);
@@ -313,8 +308,8 @@ final class XdsNameResolver extends NameResolver {
     Attributes attrs =
         Attributes.newBuilder()
             .set(XdsAttributes.XDS_CLIENT_POOL, xdsClientPool)
-            .set(XdsAttributes.XDS_CONFIG, resolveState2.lastConfig)
-            .set(XdsAttributes.XDS_CLUSTER_SUBSCRIPT_REGISTRY, resolveState2.xdsDependencyManager)
+            .set(XdsAttributes.XDS_CONFIG, resolveState.lastConfig)
+            .set(XdsAttributes.XDS_CLUSTER_SUBSCRIPT_REGISTRY, resolveState.xdsDependencyManager)
             .set(XdsAttributes.CALL_COUNTER_PROVIDER, callCounterProvider)
             .set(InternalConfigSelector.KEY, configSelector)
             .build();
@@ -444,7 +439,7 @@ final class XdsNameResolver extends NameResolver {
         }
       } while (!retainCluster(cluster));
 
-      final RouteAction routeAction = (selectedRoute != null) ? selectedRoute.routeAction : null;
+      final RouteAction routeAction = selectedRoute.routeAction;
       Long timeoutNanos = null;
       if (enableTimeout) {
         timeoutNanos = routeAction.timeoutNano();
@@ -455,7 +450,7 @@ final class XdsNameResolver extends NameResolver {
           timeoutNanos = null;
         }
       }
-      RetryPolicy retryPolicy = routeAction == null ? null : routeAction.retryPolicy();
+      RetryPolicy retryPolicy = routeAction.retryPolicy();
       // TODO(chengyuanzhang): avoid service config generation and parsing for each call.
       Map<String, ?> rawServiceConfig =
           generateServiceConfigWithMethodConfig(timeoutNanos, retryPolicy);
@@ -642,21 +637,21 @@ final class XdsNameResolver extends NameResolver {
     }
   }
 
-  class ResolveState2 implements XdsDependencyManager.XdsConfigWatcher {
+  class ResolveState implements XdsDependencyManager.XdsConfigWatcher {
     private final ConfigOrError emptyServiceConfig =
         serviceConfigParser.parseServiceConfig(Collections.<String, Object>emptyMap());
-    private boolean stopped;
+    private final String authority;
     private final XdsDependencyManager xdsDependencyManager;
+    private boolean stopped;
     @Nullable
     private Set<String> existingClusters;  // clusters to which new requests can be routed
     private XdsConfig lastConfig;
-    private final String authority;
 
-    private ResolveState2(String ldsResourceName) {
+    private ResolveState(String ldsResourceName) {
       authority = overrideAuthority != null ? overrideAuthority : encodedServiceAuthority;
       xdsDependencyManager =
           new XdsDependencyManager(xdsClient, this, syncContext, authority, ldsResourceName,
-              nameResolverArgs, scheduler );
+              nameResolverArgs, scheduler);
     }
 
     private void shutdown() {
@@ -766,7 +761,7 @@ final class XdsNameResolver extends NameResolver {
           existingClusters == null ? clusters : Sets.difference(clusters, existingClusters);
       Set<String> deletedClusters =
           existingClusters == null
-          ? Collections.emptySet() : Sets.difference(existingClusters, clusters);
+              ? Collections.emptySet() : Sets.difference(existingClusters, clusters);
       existingClusters = clusters;
       for (String cluster : addedClusters) {
         if (clusterRefs.containsKey(cluster)) {
@@ -880,9 +875,9 @@ final class XdsNameResolver extends NameResolver {
           error + ", xDS node ID: " + xdsClient.getBootstrapInfo().node().getId();
       listener.onResult(ResolutionResult.newBuilder()
           .setAttributes(Attributes.newBuilder()
-              .set(InternalConfigSelector.KEY,
-                  new FailingConfigSelector(Status.UNAVAILABLE.withDescription(errorWithNodeId)))
-              .build())
+            .set(InternalConfigSelector.KEY,
+              new FailingConfigSelector(Status.UNAVAILABLE.withDescription(errorWithNodeId)))
+            .build())
           .setServiceConfig(emptyServiceConfig)
           .build());
     }
