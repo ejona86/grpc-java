@@ -561,12 +561,8 @@ public class XdsNameResolverTest {
     FakeXdsClient xdsClient = (FakeXdsClient) resolver.getXdsClient();
     xdsClient.deliverLdsUpdateForRdsName(RDS_RESOURCE_NAME);
     xdsClient.deliverError(Status.UNAVAILABLE.withDescription("server unreachable"));
-    verify(mockListener, times(2)).onError(errorCaptor.capture());
-    Status error = errorCaptor.getAllValues().get(0);
-    assertThat(error.getCode()).isEqualTo(Code.UNAVAILABLE);
-    assertThat(error.getDescription()).isEqualTo("Unable to load LDS resource: " + AUTHORITY
-        + ". xDS server returned: UNAVAILABLE: server unreachable");
-    error = errorCaptor.getAllValues().get(1);
+    verify(mockListener).onError(errorCaptor.capture());
+    Status error = errorCaptor.getValue();
     assertThat(error.getCode()).isEqualTo(Code.UNAVAILABLE);
     assertThat(error.getDescription()).isEqualTo("Unable to load RDS resource: " + RDS_RESOURCE_NAME
         + ". xDS server returned: UNAVAILABLE: server unreachable");
