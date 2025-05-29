@@ -552,7 +552,7 @@ public class XdsDependencyManagerTest {
     controlPlaneService.setXdsConfig(
         ADS_TYPE_URL_RDS, ImmutableMap.of(XdsTestUtils.RDS_NAME, newRouteConfig));
     inOrder.verify(xdsConfigWatcher, timeout(1000)).onUpdate(xdsUpdateCaptor.capture());
-    assertThat(xdsUpdateCaptor.getValue().getValue().getClusters().keySet().size()).isEqualTo(4);
+    assertThat(xdsUpdateCaptor.getValue().getValue().getClusters()).hasSize(8);
 
     // Now that it is released, we should only have A11
     rootSub.close();
@@ -646,7 +646,7 @@ public class XdsDependencyManagerTest {
     inOrder.verify(xdsConfigWatcher, timeout(1000)).onUpdate(xdsUpdateCaptor.capture());
     XdsConfig config = xdsUpdateCaptor.getValue().getValue();
     assertThat(config.getVirtualHost().name()).isEqualTo(newRdsName);
-    assertThat(config.getClusters().size()).isEqualTo(4);
+    assertThat(config.getClusters()).hasSize(8);
   }
 
   @Test
@@ -697,8 +697,8 @@ public class XdsDependencyManagerTest {
     controlPlaneService.setXdsConfig(ADS_TYPE_URL_EDS, edsMap);
 
     // Verify that the config is updated as expected
-    ClusterNameMatcher nameMatcher
-        = new ClusterNameMatcher(Arrays.asList("root", "clusterA21", "clusterA22"));
+    ClusterNameMatcher nameMatcher = new ClusterNameMatcher(Arrays.asList(
+        "root", "clusterA", "clusterA2", "clusterA21", "clusterA22"));
     inOrder.verify(xdsConfigWatcher, timeout(1000)).onUpdate(argThat(nameMatcher));
   }
 
