@@ -1230,7 +1230,7 @@ public class XdsNameResolverTest {
               .roundRobinLbPolicy();
       xdsClient.deliverCdsUpdate(clusterName, forEds.build());
       EdsUpdate edsUpdate = new EdsUpdate(clusterName,
-          XdsTestUtils.createMinimalLbEndpointsMap("host"), Collections.emptyList());
+          XdsTestUtils.createMinimalLbEndpointsMap("127.0.0.3"), Collections.emptyList());
       xdsClient.deliverEdsUpdate(clusterName, edsUpdate);
     }
   }
