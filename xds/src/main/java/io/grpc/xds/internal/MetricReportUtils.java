@@ -64,4 +64,28 @@ public final class MetricReportUtils {
     }
     return OptionalDouble.empty();
   }
+
+  public static OptionalDouble getMetric2(MetricReport report, String metricName, String secondary) {
+    if (metricName.equals("cpu_utilization")) {
+      return OptionalDouble.of(report.getCpuUtilization());
+    } else if (metricName.equals("application_utilization")) {
+      return OptionalDouble.of(report.getApplicationUtilization());
+    } else if (metricName.equals("mem_utilization")) {
+      return OptionalDouble.of(report.getMemoryUtilization());
+    } else if (metricName.equals("utilization")) {
+      Map<String, Double> map = report.getUtilizationMetrics();
+      Double val = map.get(secondary);
+      if (val != null) {
+        return OptionalDouble.of(val);
+      }
+    } else if (metricName.equals("named_metrics")) {
+      Map<String, Double> map = report.getNamedMetrics();
+      Double val = map.get(secondary);
+      if (val != null) {
+        return OptionalDouble.of(val);
+      }
+    }
+    return OptionalDouble.empty();
+  }
+
 }

@@ -6,6 +6,7 @@ plugins {
 
     id "com.google.protobuf"
     id "com.gradleup.shadow"
+    id "me.champeau.jmh"
     id "ru.vyarus.animalsniffer"
 }
 
@@ -225,6 +226,10 @@ tasks.named("jacocoTestReport").configure {
                 '**/xds/annotations/**',
         ])
     }
+}
+
+jmh {
+    profilers = ["gc"]
 }
 
 publishing {
